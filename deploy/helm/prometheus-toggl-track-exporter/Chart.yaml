@@ -1,0 +1,35 @@
+apiVersion: v2
+name: prometheus-toggl-track-exporter
+description: A Helm chart for the Prometheus Toggl Track Exporter
+
+# A chart can be either an 'application' or a 'library' chart.
+# Application charts are a collection of templates that can be packaged into versioned archives
+# to be deployed.
+# Library charts provide useful utilities or functions for the chart developer.
+# They mainly contain 'templates' and are combined with other charts to build more complex
+# packages.
+type: application
+
+# This is the chart version. This version number should be incremented each time you make changes
+# to the chart and its templates, including the app version.
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 0.1.0 # Reset or update as needed
+
+# This is the version number of the application being deployed. This version number should be
+# incremented each time you make changes to the application. Versions are not expected to
+# follow Semantic Versioning. They should reflect the version the application is using.
+# It is recommended to use it with quotes.
+appVersion: "1.1.0" # Match project version or update
+
+keywords:
+  - prometheus
+  - exporter
+  - metrics
+  - toggl
+  - toggl track
+
+maintainers:
+  - name: echohello-dev
+    url: https://github.com/echohello-dev
+sources:
+  - https://github.com/echohello-dev/prometheus-todoist-exporter

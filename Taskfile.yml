@@ -1,0 +1,159 @@
+version: '3'
+
+dotenv:
+  - .env
+
+tasks:
+  install:
+    desc: Install dependencies with Poetry
+    cmds:
+      - "poetry install"
+
+  format:
+    desc: Format the code with ruff
+    cmds:
+      - "poetry run ruff format ."
+
+  lint:
+    desc: Run linting checks
+    cmds:
+      - "poetry run ruff check ."
+
+  lint-fix:
+    desc: Run linting and fix issues
+    cmds:
+      - "poetry run ruff check --fix ."
+
+  test:
+    desc: Run tests
+    cmds:
+      - "poetry run pytest"
+
+  run:
+    desc: Run the Toggl Track exporter locally
+    cmds:
+      - "poetry run toggl-track-exporter"
+
+  pre-commit-install:
+    desc: Install pre-commit hooks
+    cmds:
+      - "poetry run pre-commit install"
+
+  pre-commit-run:
+    desc: Run pre-commit checks on all files
+    cmds:
+      - "poetry run pre-commit run --all-files"
+
+  pre-commit-update:
+    desc: Update pre-commit hooks to the latest version
+    cmds:
+      - "poetry run pre-commit autoupdate"
+
+  docker-build:
+    desc: Build the Docker image locally
+    cmds:
+      - docker build -t ghcr.io/echohello-dev/prometheus-toggl-track-exporter:latest .
+
+  docker-run:
+    desc: Run the Docker container locally
+    cmds:
+      - docker run -p 9090:9090 -e TOGGL_API_TOKEN=${TOGGL_API_TOKEN} ghcr.io/echohello-dev/prometheus-toggl-track-exporter:latest
+
+  docker-compose-up:
+    desc: Run using Docker Compose
+    cmds:
+      - docker compose up -d
+
+  docker-compose-down:
+    desc: Stop docker-compose services
+    cmds:
+      - docker compose down
+
+  setup-dev:
+    desc: Setup local development environment
+    cmds:
+      - cp -n .env.example .env || true
+      - echo "Created .env file from .env.example (if it didn't already exist). Please update with your TOGGL_API_TOKEN."
+      - task install
+      - task pre-commit-install
+
+  setup:
+    desc: Setup using asdf and development environment
+    cmds:
+      - |
+        if ! command -v asdf &> /dev/null; then
+          echo "asdf not found, installing..."
+          git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3 || true
+          echo 'source ~/.asdf/asdf.sh' >> ~/.bashrc
+          echo 'source ~/.asdf/completions/asdf.bash' >> ~/.bashrc
+          source ~/.asdf/asdf.sh
+        fi
+      - asdf plugin add python || true
+      - asdf plugin add task || true
+      - asdf install
+      - pip install poetry # Consider if this should use asdf poetry plugin
+      - asdf reshim python
+      - task setup-dev
+
+  all:
+    desc: Run format, lint, and test tasks
+    deps: [format, lint, test]
+
+  publish-pypi:
+    desc: Publish to PyPI
+    cmds:
+      - poetry publish --build
+
+# Note: Kubernetes and Helm tasks assume resources/paths will be renamed accordingly.
+# Adjust paths in deploy/ if necessary.
+
+  k8s-deploy:
+    desc: Deploy to Kubernetes using kustomize
+    cmds:
+      - |
+        if [ -z "${TOGGL_API_TOKEN}" ]; then
+          echo "Error: TOGGL_API_TOKEN environment variable is not set"
+          exit 1
+        fi
+      - kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+      - |
+        TOGGL_API_TOKEN_B64=$(echo -n "${TOGGL_API_TOKEN}" | base64)
+        # Assumes secret.yaml expects BASE64_ENCODED_API_TOKEN
+        sed "s/<BASE64_ENCODED_API_TOKEN>/$TOGGL_API_TOKEN_B64/" deploy/kubernetes/secret.yaml | kubectl apply -f -
+      - kubectl apply -k deploy/kubernetes
+
+  k8s-delete:
+    desc: Delete Kubernetes deployment
+    cmds:
+      - kubectl delete -k deploy/kubernetes
+      - echo "You may want to delete the namespace with 'kubectl delete namespace monitoring' if it's no longer needed"
+
+  helm-deploy:
+    desc: Deploy using Helm chart
+    cmds:
+      - |
+        if [ -z "${TOGGL_API_TOKEN}" ]; then
+          echo "Error: TOGGL_API_TOKEN environment variable is not set"
+          exit 1
+        fi
+      # Assumes helm chart directory and release name are updated
+      - helm upgrade --install toggl-track-exporter ./deploy/helm/prometheus-toggl-track-exporter --namespace monitoring --create-namespace --set toggl.apiToken="${TOGGL_API_TOKEN}"
+
+  helm-delete:
+    desc: Delete Helm deployment
+    cmds:
+      # Assumes release name is updated
+      - helm uninstall toggl-track-exporter --namespace monitoring
+      - echo "You may want to delete the namespace with 'kubectl delete namespace monitoring' if it's no longer needed"
+
+  helm-lint:
+    desc: Lint the Helm chart
+    cmds:
+      # Assumes helm chart directory is updated
+      - helm lint ./deploy/helm/prometheus-toggl-track-exporter
+
+  helm-template:
+    desc: Generate Kubernetes manifests from Helm chart
+    cmds:
+      # Assumes helm chart directory and release name are updated
+      - helm template toggl-track-exporter ./deploy/helm/prometheus-toggl-track-exporter --namespace monitoring --set toggl.apiToken="dummy-value"
