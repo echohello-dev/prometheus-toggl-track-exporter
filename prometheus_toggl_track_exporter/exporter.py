@@ -1,11 +1,12 @@
-from datetime import datetime, timedelta, timezone
-from http import HTTPStatus
-from prometheus_client import Counter, Gauge, start_http_server
-from typing import Any, Optional
 import base64
 import os
-import requests
 import time
+from datetime import datetime, timedelta, timezone
+from http import HTTPStatus
+from typing import Optional
+
+import requests
+from prometheus_client import Counter, Gauge, start_http_server
 
 # --- Configuration ---
 TOGGL_API_TOKEN = os.environ.get("TOGGL_API_TOKEN")
@@ -92,7 +93,8 @@ TOGGL_TIME_ENTRIES_COUNT = Gauge(
 def _get_auth_header() -> dict[str, str]:
     """Generates the Basic Auth header for Toggl API."""
     if not TOGGL_API_TOKEN:
-        raise ValueError("TOGGL_API_TOKEN environment variable not set.")
+        # Ignore TRY003 for this specific informative message
+        raise ValueError("TOGGL_API_TOKEN not set.")  # noqa: TRY003
     credentials = f"{TOGGL_API_TOKEN}:api_token"
     encoded_creds = base64.b64encode(credentials.encode()).decode("ascii")
     return {"Authorization": f"Basic {encoded_creds}"}
@@ -100,7 +102,7 @@ def _get_auth_header() -> dict[str, str]:
 
 def _make_toggl_request(
     endpoint: str, method: str = "GET", params: Optional[dict] = None
-) -> Optional[Any]:
+) -> Optional[dict]:
     """Makes a request to the Toggl API."""
     url = f"{TOGGL_API_BASE_URL}{endpoint}"
     try:
@@ -118,7 +120,8 @@ def _make_toggl_request(
             return None
         if response.content:
             return response.json()
-        return None
+        else:
+            return None
 
     except requests.exceptions.RequestException as e:
         print(f"Error making Toggl API request to {endpoint}: {e}")
@@ -304,13 +307,8 @@ def update_time_entries_metrics(lookback_hours: int) -> None:
     # A better approach might be to use a Counter for total counts/duration
     # if exact point-in-time counts for the window are not strictly needed.
 
-    # Alternative: Explicitly clear specific timeframe labels if possible (hard)
-    # TOGGL_TIME_ENTRIES_DURATION_SECONDS.remove(..., timeframe=timeframe_label)
-    # TOGGL_TIME_ENTRIES_COUNT.remove(..., timeframe=timeframe_label)
-
     if entries is None:
         print("Failed to fetch time entries, skipping update.")
-        # Optionally set counts/duration to 0 for this timeframe?
         return
 
     aggregated_durations: dict[tuple, float] = {}

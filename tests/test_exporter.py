@@ -1,10 +1,11 @@
+import base64
 import unittest
-from datetime import UTC, datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
-import base64
-import requests
 
+import pytest
+import requests
 from prometheus_client import REGISTRY
 
 # Import the Toggl exporter module
@@ -29,12 +30,11 @@ class TestTogglExporter(unittest.TestCase):
         for name, collector in list(REGISTRY._names_to_collectors.items()):
             # Unregister collectors directly using the list of collectors
             # This avoids issues if a collector is registered under multiple names
-            try:  # noqa: SIM105
+            try:
                 REGISTRY.unregister(collector)
             except KeyError:
                 # Skip metrics that aren't properly registered or already unregistered
                 print(f"Metric {name} already unregistered or not found.")
-                pass
 
         # Set API token for tests
         # Patching the constant directly in the module
@@ -84,7 +84,7 @@ class TestTogglExporter(unittest.TestCase):
 
         # Verify results
         mock_make_request.assert_called_once_with("/me")
-        self.assertEqual(result, mock_response)
+        assert result == mock_response
 
     @patch("prometheus_toggl_track_exporter.exporter._make_toggl_request")
     def test_get_me_error(self, mock_make_request):
@@ -96,7 +96,7 @@ class TestTogglExporter(unittest.TestCase):
 
         # Verify results
         mock_make_request.assert_called_once_with("/me")
-        self.assertIsNone(result)
+        assert result is None
         # Error count is incremented within _make_toggl_request,
         # so we'd test that separately
 
@@ -120,7 +120,7 @@ class TestTogglExporter(unittest.TestCase):
 
         # Verify results
         mock_make_request.assert_called_once_with("/me/time_entries/current")
-        self.assertEqual(result, mock_response)
+        assert result == mock_response
 
     @patch("prometheus_toggl_track_exporter.exporter._make_toggl_request")
     def test_get_current_time_entry_none_running(self, mock_make_request):
@@ -132,7 +132,7 @@ class TestTogglExporter(unittest.TestCase):
 
         # Verify results
         mock_make_request.assert_called_once_with("/me/time_entries/current")
-        self.assertIsNone(result)
+        assert result is None
 
     def test_get_auth_header_success(self):
         # Test with the patched token
@@ -141,17 +141,17 @@ class TestTogglExporter(unittest.TestCase):
         expected_header = {"Authorization": f"Basic {expected_encoded}"}
 
         header = exporter._get_auth_header()
-        self.assertEqual(header, expected_header)
+        assert header == expected_header
 
     def test_get_auth_header_no_token(self):
         # Temporarily stop the patcher to simulate missing token
         self.api_token_patcher.stop()
-        with patch("prometheus_toggl_track_exporter.exporter.TOGGL_API_TOKEN", None):
-            with self.assertRaises(ValueError) as cm:
-                exporter._get_auth_header()
-            self.assertIn(
-                "TOGGL_API_TOKEN environment variable not set", str(cm.exception)
-            )
+        expected_error_msg = "TOGGL_API_TOKEN not set."
+        with (
+            patch("prometheus_toggl_track_exporter.exporter.TOGGL_API_TOKEN", None),
+            pytest.raises(ValueError, match=expected_error_msg),
+        ):
+            exporter._get_auth_header()
         # Restart patcher if other tests in the same class need it
         self.api_token_patcher.start()
 
@@ -171,12 +171,12 @@ class TestTogglExporter(unittest.TestCase):
         expected_url = f"{exporter.TOGGL_API_BASE_URL}/test/endpoint"
         mock_request.assert_called_once()
         call_args, call_kwargs = mock_request.call_args
-        self.assertEqual(call_args[0], "GET")  # Default method
-        self.assertEqual(call_args[1], expected_url)
-        self.assertIn("Authorization", call_kwargs["headers"])
-        self.assertEqual(result, {"data": "success"})
+        assert call_args[0] == "GET"  # Default method
+        assert call_args[1] == expected_url
+        assert "Authorization" in call_kwargs["headers"]
+        assert result == {"data": "success"}
         # Check error metric was NOT incremented
-        self.assertEqual(self.api_errors.labels(endpoint="test")._value.get(), 0)
+        assert self.api_errors.labels(endpoint="test")._value.get() == 0
 
     @patch("prometheus_toggl_track_exporter.exporter.requests.request")
     def test_make_toggl_request_http_error(self, mock_request):
@@ -196,11 +196,11 @@ class TestTogglExporter(unittest.TestCase):
         expected_url = f"{exporter.TOGGL_API_BASE_URL}/invalid/endpoint"
         mock_request.assert_called_once()
         call_args, call_kwargs = mock_request.call_args
-        self.assertEqual(call_args[1], expected_url)
-        self.assertIsNone(result)
+        assert call_args[1] == expected_url
+        assert result is None
         # Check error metric was incremented
         # The endpoint label is the first part of the path
-        self.assertEqual(self.api_errors.labels(endpoint="invalid")._value.get(), 1)
+        assert self.api_errors.labels(endpoint="invalid")._value.get() == 1
 
     @patch("prometheus_toggl_track_exporter.exporter.requests.request")
     def test_make_toggl_request_connection_error(self, mock_request):
@@ -214,25 +214,26 @@ class TestTogglExporter(unittest.TestCase):
         expected_url = f"{exporter.TOGGL_API_BASE_URL}/test/conn"
         mock_request.assert_called_once()
         call_args, call_kwargs = mock_request.call_args
-        self.assertEqual(call_args[1], expected_url)
-        self.assertIsNone(result)
+        assert call_args[1] == expected_url
+        assert result is None
         # Check error metric was incremented
-        self.assertEqual(self.api_errors.labels(endpoint="test")._value.get(), 1)
+        assert self.api_errors.labels(endpoint="test")._value.get() == 1
 
     @patch("prometheus_toggl_track_exporter.exporter._make_toggl_request")
     def test_collect_metrics_no_token(self, mock_make_request):
         # Stop the patcher to simulate missing token
         self.api_token_patcher.stop()
-        with patch("prometheus_toggl_track_exporter.exporter.TOGGL_API_TOKEN", None):
-            # Redirect print to check output if needed, or just check behavior
-            with patch("builtins.print") as mock_print:
-                exporter.collect_metrics()
-                # Verify _make_toggl_request was not called
-                mock_make_request.assert_not_called()
-                # Verify error was printed
-                mock_print.assert_any_call(
-                    "Error: TOGGL_API_TOKEN environment variable not set."
-                )
+        with (
+            patch("prometheus_toggl_track_exporter.exporter.TOGGL_API_TOKEN", None),
+            patch("builtins.print") as mock_print,
+        ):
+            exporter.collect_metrics()
+            # Verify _make_toggl_request was not called
+            mock_make_request.assert_not_called()
+            # Verify error was printed
+            mock_print.assert_any_call(
+                "Error: TOGGL_API_TOKEN environment variable not set."
+            )
         # Restart patcher
         self.api_token_patcher.start()
 
@@ -266,9 +267,7 @@ class TestTogglExporter(unittest.TestCase):
             exporter.TIME_ENTRIES_LOOKBACK_HOURS
         )
         # Verify scrape duration was measured (value > 0)
-        self.assertGreater(
-            exporter.TOGGL_SCRAPE_DURATION.collect()[0].samples[0].value, 0
-        )
+        assert exporter.TOGGL_SCRAPE_DURATION.collect()[0].samples[0].value > 0
 
     @patch("prometheus_toggl_track_exporter.exporter.get_me")
     @patch("prometheus_toggl_track_exporter.exporter.get_current_time_entry")
@@ -282,7 +281,7 @@ class TestTogglExporter(unittest.TestCase):
         "prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_DURATION_SECONDS"
     )
     @patch("prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_COUNT")
-    def test_collect_metrics_no_workspace_id(
+    def test_collect_metrics_no_workspace_id(  # noqa: PLR0913
         self,
         mock_time_count,
         mock_time_duration,
@@ -352,13 +351,13 @@ class TestTogglExporter(unittest.TestCase):
 
         # Check running gauge
         running_value = self.time_entry_running.labels(**expected_labels)._value.get()
-        self.assertEqual(running_value, 1)
+        assert running_value == 1
 
         # Check timestamp gauge
         timestamp_value = self.time_entry_start_timestamp.labels(
             **expected_labels
         )._value.get()
-        self.assertAlmostEqual(timestamp_value, start_time.timestamp(), places=0)
+        assert round(timestamp_value) == round(start_time.timestamp())
 
     def test_update_running_timer_metrics_none_running(self):
         """Test updating metrics when no timer is running."""
@@ -383,15 +382,15 @@ class TestTogglExporter(unittest.TestCase):
         # Verify the old metric is *not* actively set to 0 by our function.
         # Prometheus handles staleness. We check the value remains.
         running_value = self.time_entry_running.labels(**old_labels)._value.get()
-        self.assertEqual(running_value, 1)
+        assert running_value == 1
         timestamp_value = self.time_entry_start_timestamp.labels(
             **old_labels
         )._value.get()
-        self.assertAlmostEqual(timestamp_value, start_time.timestamp(), places=0)
+        assert round(timestamp_value) == round(start_time.timestamp())
 
-        # Ensure no *new* metrics were set (e.g., with default labels)
-        # This is harder to test directly without knowing all possible labels.
-        # The main check is that the function doesn't crash and doesn't incorrectly clear.
+        # Ensure no *new* metrics were set (e.g., with default labels).
+        # Testing this directly is hard; the main check is that the function doesn't
+        # crash and doesn't incorrectly clear metrics.
 
     @patch("prometheus_toggl_track_exporter.exporter.get_projects")
     @patch("prometheus_toggl_track_exporter.exporter.get_clients")
@@ -400,6 +399,11 @@ class TestTogglExporter(unittest.TestCase):
         self, mock_get_tags, mock_get_clients, mock_get_projects
     ):
         """Test updating aggregate metrics successfully."""
+        # Define expected counts
+        expected_project_count = 2
+        expected_client_count = 1
+        expected_tag_count = 3
+
         # Mock API responses
         mock_get_projects.return_value = [
             {"id": 1, "name": "P1"},
@@ -422,13 +426,18 @@ class TestTogglExporter(unittest.TestCase):
 
         # Verify metrics
         ws_label = str(TEST_WORKSPACE_ID)
-        self.assertEqual(
-            self.projects_total.labels(workspace_id=ws_label)._value.get(), 2
+        assert (
+            self.projects_total.labels(workspace_id=ws_label)._value.get()
+            == expected_project_count
         )
-        self.assertEqual(
-            self.clients_total.labels(workspace_id=ws_label)._value.get(), 1
+        assert (
+            self.clients_total.labels(workspace_id=ws_label)._value.get()
+            == expected_client_count
         )
-        self.assertEqual(self.tags_total.labels(workspace_id=ws_label)._value.get(), 3)
+        assert (
+            self.tags_total.labels(workspace_id=ws_label)._value.get()
+            == expected_tag_count
+        )
 
     @patch("prometheus_toggl_track_exporter.exporter.get_projects")
     @patch("prometheus_toggl_track_exporter.exporter.get_clients")
@@ -437,6 +446,8 @@ class TestTogglExporter(unittest.TestCase):
         self, mock_get_tags, mock_get_clients, mock_get_projects
     ):
         """Test updating aggregate metrics when API calls fail."""
+        # Define expected counts on error
+        expected_count_on_error = 0
         # Mock API responses (returning None indicating failure)
         mock_get_projects.return_value = None
         mock_get_clients.return_value = None
@@ -452,13 +463,18 @@ class TestTogglExporter(unittest.TestCase):
 
         # Verify metrics are set to 0 on failure
         ws_label = str(TEST_WORKSPACE_ID)
-        self.assertEqual(
-            self.projects_total.labels(workspace_id=ws_label)._value.get(), 0
+        assert (
+            self.projects_total.labels(workspace_id=ws_label)._value.get()
+            == expected_count_on_error
         )
-        self.assertEqual(
-            self.clients_total.labels(workspace_id=ws_label)._value.get(), 0
+        assert (
+            self.clients_total.labels(workspace_id=ws_label)._value.get()
+            == expected_count_on_error
         )
-        self.assertEqual(self.tags_total.labels(workspace_id=ws_label)._value.get(), 0)
+        assert (
+            self.tags_total.labels(workspace_id=ws_label)._value.get()
+            == expected_count_on_error
+        )
 
     @patch("prometheus_toggl_track_exporter.exporter.get_time_entries")
     def test_update_time_entries_metrics_success(self, mock_get_time_entries):
@@ -470,6 +486,16 @@ class TestTogglExporter(unittest.TestCase):
             timespec="seconds"
         )
         end_iso = now.isoformat(timespec="seconds")
+
+        # Define expected values
+        entry1_duration = 3600  # 1 hour
+        entry2_duration = 1800  # 0.5 hours
+        entry3_duration = 7200  # 2 hours
+        entry4_duration = 900  # 15 mins
+        expected_agg_duration_1_2 = entry1_duration + entry2_duration
+        expected_agg_count_1_2 = 2
+        expected_agg_count_3 = 1
+        expected_agg_count_4 = 1
 
         # Mock API response
         mock_entries = [
@@ -483,7 +509,7 @@ class TestTogglExporter(unittest.TestCase):
                 "task_name": TEST_TASK_NAME,
                 "tags": [TEST_TAG_NAME],  # Single tag
                 "billable": True,
-                "duration": 3600,  # 1 hour
+                "duration": entry1_duration,
                 "start": (now - timedelta(hours=2)).isoformat(),
                 "stop": (now - timedelta(hours=1)).isoformat(),
             },
@@ -497,7 +523,7 @@ class TestTogglExporter(unittest.TestCase):
                 "task_name": TEST_TASK_NAME,
                 "tags": [TEST_TAG_NAME],
                 "billable": True,
-                "duration": 1800,  # 0.5 hours
+                "duration": entry2_duration,
                 "start": (now - timedelta(hours=4)).isoformat(),
                 "stop": (now - timedelta(hours=3.5)).isoformat(),
             },
@@ -511,7 +537,7 @@ class TestTogglExporter(unittest.TestCase):
                 "task_name": None,
                 "tags": ["internal", "dev"],  # Multiple tags
                 "billable": False,
-                "duration": 7200,  # 2 hours
+                "duration": entry3_duration,
                 "start": (now - timedelta(hours=6)).isoformat(),
                 "stop": (now - timedelta(hours=4)).isoformat(),
             },
@@ -525,7 +551,7 @@ class TestTogglExporter(unittest.TestCase):
                 "task_name": None,
                 "tags": [],
                 "billable": False,
-                "duration": 900,  # 15 mins
+                "duration": entry4_duration,
                 "start": (now - timedelta(hours=8)).isoformat(),
                 "stop": (now - timedelta(hours=7.75)).isoformat(),
             },
@@ -565,10 +591,14 @@ class TestTogglExporter(unittest.TestCase):
             "billable": "True",
             "timeframe": timeframe_label,
         }
-        self.assertEqual(
-            self.time_entries_duration.labels(**labels1)._value.get(), 3600 + 1800
+        assert (
+            self.time_entries_duration.labels(**labels1)._value.get()
+            == expected_agg_duration_1_2
         )
-        self.assertEqual(self.time_entries_count.labels(**labels1)._value.get(), 2)
+        assert (
+            self.time_entries_count.labels(**labels1)._value.get()
+            == expected_agg_count_1_2
+        )
 
         # Verify metrics for Entry 3
         labels3 = {
@@ -581,10 +611,13 @@ class TestTogglExporter(unittest.TestCase):
             "billable": "False",
             "timeframe": timeframe_label,
         }
-        self.assertEqual(
-            self.time_entries_duration.labels(**labels3)._value.get(), 7200
+        assert (
+            self.time_entries_duration.labels(**labels3)._value.get() == entry3_duration
         )
-        self.assertEqual(self.time_entries_count.labels(**labels3)._value.get(), 1)
+        assert (
+            self.time_entries_count.labels(**labels3)._value.get()
+            == expected_agg_count_3
+        )
 
         # Verify metrics for Entry 4
         labels4 = {
@@ -597,17 +630,22 @@ class TestTogglExporter(unittest.TestCase):
             "billable": "False",
             "timeframe": timeframe_label,
         }
-        self.assertEqual(self.time_entries_duration.labels(**labels4)._value.get(), 900)
-        self.assertEqual(self.time_entries_count.labels(**labels4)._value.get(), 1)
+        assert (
+            self.time_entries_duration.labels(**labels4)._value.get() == entry4_duration
+        )
+        assert (
+            self.time_entries_count.labels(**labels4)._value.get()
+            == expected_agg_count_4
+        )
 
     @patch("prometheus_toggl_track_exporter.exporter.get_time_entries")
     def test_update_time_entries_metrics_api_error(self, mock_get_time_entries):
         """Test time entry metrics update when API call fails."""
         lookback_hours = 1
+        expected_dummy_count = 5
         mock_get_time_entries.return_value = None  # Simulate API error
 
         # Set some dummy values first to ensure they aren't cleared (unless designed to)
-        # Note: Current implementation doesn't explicitly clear on error.
         dummy_labels = {
             "workspace_id": "1",
             "project_id": "1",
@@ -618,16 +656,19 @@ class TestTogglExporter(unittest.TestCase):
             "billable": "False",
             "timeframe": f"{lookback_hours}h",
         }
-        self.time_entries_count.labels(**dummy_labels).set(5)
+        self.time_entries_count.labels(**dummy_labels).set(expected_dummy_count)
 
         # Run the function
         exporter.update_time_entries_metrics(lookback_hours)
 
         # Verify API call was made
-        self.assertTrue(mock_get_time_entries.called)
+        assert mock_get_time_entries.called
 
         # Verify dummy metric was NOT cleared or reset (based on current logic)
-        self.assertEqual(self.time_entries_count.labels(**dummy_labels)._value.get(), 5)
+        assert (
+            self.time_entries_count.labels(**dummy_labels)._value.get()
+            == expected_dummy_count
+        )
 
 
 # --- Remove old Todoist tests ---
