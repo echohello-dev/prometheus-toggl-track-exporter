@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/echohello-dev/prometheus-toggl-track-exporter/compare/v1.1.0...v1.2.0) (2025-04-03)
+
+
+### Features
+
+* **metrics:** More metrics and docs ([#4](https://github.com/echohello-dev/prometheus-toggl-track-exporter/issues/4)) ([316591c](https://github.com/echohello-dev/prometheus-toggl-track-exporter/commit/316591c7938ef1c2482fb349d10c4801676e04ec))
+
 ## [1.1.0](https://github.com/echohello-dev/prometheus-toggl-track-exporter/compare/v1.0.0...v1.1.0) (2025-04-03)
 
 
