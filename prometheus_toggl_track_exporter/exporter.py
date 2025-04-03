@@ -93,8 +93,28 @@ TOGGL_TIME_ENTRY_START_TIMESTAMP = Gauge(
 TOGGL_PROJECTS_TOTAL = Gauge(
     "toggl_projects_total", "Total number of projects", ["workspace_id"]
 )
+TOGGL_PROJECT_INFO = Gauge(
+    "toggl_project_info",
+    "Information about individual projects",
+    [
+        "workspace_id",
+        "project_id",
+        "project_name",
+        "client_id",
+        "client_name",
+        "active",
+        "billable",
+        "is_private",
+        "color",
+    ],
+)
 TOGGL_CLIENTS_TOTAL = Gauge(
     "toggl_clients_total", "Total number of clients", ["workspace_id"]
+)
+TOGGL_CLIENT_INFO = Gauge(
+    "toggl_client_info",
+    "Information about individual clients",
+    ["workspace_id", "client_id", "client_name"],
 )
 TOGGL_TAGS_TOTAL = Gauge("toggl_tags_total", "Total number of tags", ["workspace_id"])
 
@@ -351,25 +371,75 @@ def update_aggregate_metrics(workspace_id: int) -> None:
 
     ws_label = str(workspace_id)
 
-    projects = get_projects(workspace_id)
-    if projects is not None:  # API returns list or null on error
-        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(len(projects))
-    else:
-        # Optionally clear or set to 0 if needed, depends on desired
-        # behavior on error
-        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(0)
-
+    # --- Clients ---
     clients = get_clients(workspace_id)
+    client_map: dict[int, str] = {}
+    # Clear previous client info for this workspace before setting new ones
+    TOGGL_CLIENT_INFO.clear()
+    # Need to selectively clear based on workspace_id if supporting multiple
+    # For now, assumes single workspace context per run.
+
     if clients is not None:
         TOGGL_CLIENTS_TOTAL.labels(workspace_id=ws_label).set(len(clients))
+        for client in clients:
+            client_id = client.get("id")
+            client_name = client.get("name", "unknown")
+            if client_id is not None:
+                client_map[client_id] = client_name
+                TOGGL_CLIENT_INFO.labels(
+                    workspace_id=ws_label,
+                    client_id=str(client_id),
+                    client_name=client_name,
+                ).set(1)
     else:
         TOGGL_CLIENTS_TOTAL.labels(workspace_id=ws_label).set(0)
+        print(f"Could not fetch clients for workspace {ws_label}.")
 
+    # --- Projects ---
+    projects = get_projects(workspace_id)
+    # Clear previous project info for this workspace
+    TOGGL_PROJECT_INFO.clear()
+    # Need selective clear if supporting multiple workspaces simultaneously.
+
+    if projects is not None:
+        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(len(projects))
+        for project in projects:
+            project_id = project.get("id")
+            if project_id is None:
+                continue
+
+            project_name = project.get("name", "unknown")
+            client_id = project.get("client_id")  # Can be null
+            client_name = client_map.get(client_id, "none") if client_id else "none"
+            active = project.get("active", True)  # Default to True if missing?
+            billable = project.get("billable", False)
+            is_private = project.get("is_private", True)  # Check default
+            color = project.get("color", "unknown")
+
+            TOGGL_PROJECT_INFO.labels(
+                workspace_id=ws_label,
+                project_id=str(project_id),
+                project_name=project_name,
+                client_id=str(client_id) if client_id else "none",
+                client_name=client_name,
+                active=str(active),
+                billable=str(billable),
+                is_private=str(is_private),
+                color=color,
+            ).set(1)
+    else:
+        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(0)
+        print(f"Could not fetch projects for workspace {ws_label}.")
+
+    # --- Tags ---
     tags = get_tags(workspace_id)
+    # Note: No TOGGL_TAG_INFO gauge defined currently
     if tags is not None:
         TOGGL_TAGS_TOTAL.labels(workspace_id=ws_label).set(len(tags))
     else:
         TOGGL_TAGS_TOTAL.labels(workspace_id=ws_label).set(0)
+
+    print(f"Updated aggregate metrics for workspace ID: {ws_label}")
 
 
 def update_time_entries_metrics(lookback_hours: int) -> None:
