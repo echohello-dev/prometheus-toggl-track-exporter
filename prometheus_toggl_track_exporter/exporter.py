@@ -259,6 +259,15 @@ def get_tags(workspace_id: int) -> Optional[list]:
     return _make_toggl_request(f"/workspaces/{workspace_id}/tags")
 
 
+def get_tasks(workspace_id: int) -> Optional[list]:
+    """Fetches active tasks for a given workspace."""
+    # Note: The API might offer filtering options (e.g., ?active=true)
+    # or might require fetching per project if a workspace-wide endpoint
+    # for *all* tasks isn't available or is too large.
+    # Assuming a workspace-level endpoint exists for simplicity.
+    return _make_toggl_request(f"/workspaces/{workspace_id}/tasks")
+
+
 def get_time_entries(start_date: str, end_date: str) -> Optional[list]:
     """Fetches time entries between start_date and end_date (RFC3339 format)."""
     params = {"start_date": start_date, "end_date": end_date}
@@ -473,8 +482,11 @@ def update_aggregate_metrics(workspace_id: int) -> None:
     print(f"Updated aggregate metrics for workspace ID: {ws_label}")
 
 
-def update_time_entries_metrics(lookback_hours: int) -> None:
-    """Fetches and updates metrics for time entries in the lookback period."""
+def update_time_entries_metrics(workspace_id: int, lookback_hours: int) -> None:
+    """
+    Fetches and updates metrics for time entries in the lookback period.
+    Uses pre-fetched project and task data to ensure names are included.
+    """
     now = datetime.now(timezone.utc)
     start_time = now - timedelta(hours=lookback_hours)
     start_date_str = start_time.isoformat(timespec="seconds")
@@ -483,13 +495,51 @@ def update_time_entries_metrics(lookback_hours: int) -> None:
 
     print(
         f"Fetching time entries from {start_date_str} to {end_date_str} "
-        f"({timeframe_label})"
+        f"({timeframe_label}) for workspace {workspace_id}"
     )
 
-    entries = get_time_entries(start_date=start_date_str, end_date=end_date_str)
+    # --- Fetch mapping data ---
+    print(f"Fetching projects and tasks for workspace {workspace_id}...")
+    projects = get_projects(workspace_id)
+    tasks = get_tasks(workspace_id)  # Fetch tasks for the workspace
 
-    if entries is None:
+    project_name_map: dict[int, str] = {}
+    if projects:
+        project_name_map = {
+            proj["id"]: proj.get("name", "unknown") for proj in projects if "id" in proj
+        }
+    else:
+        print(f"Warning: Could not fetch projects for workspace {workspace_id}.")
+
+    task_name_map: dict[int, str] = {}
+    if tasks:
+        task_name_map = {
+            task["id"]: task.get("name", "unknown") for task in tasks if "id" in task
+        }
+    else:
+        # This might be expected if the workspace has no tasks or the endpoint differs
+        print(
+            f"Info: Could not fetch tasks for workspace {workspace_id}. Task names might be 'none'."
+        )
+
+    # --- Fetch Time Entries ---
+    # Note: The /me/time_entries endpoint fetches across *all* workspaces the user
+    # has access to within the date range. We will filter entries by the target
+    # workspace_id client-side after fetching.
+    all_entries = get_time_entries(start_date=start_date_str, end_date=end_date_str)
+
+    if all_entries is None:
         print("Failed to fetch time entries, skipping update.")
+        return
+
+    # Filter entries for the current workspace being processed
+    entries = [e for e in all_entries if e.get("workspace_id") == workspace_id]
+    if not entries:
+        print(
+            f"No completed time entries found for workspace {workspace_id} in the lookback period."
+        )
+        # Clear metrics for this specific workspace/timeframe combo if needed
+        # (Add logic here if required, depends on desired behavior for empty results)
         return
 
     # --- Aggregation Setup ---
@@ -547,13 +597,26 @@ def update_time_entries_metrics(lookback_hours: int) -> None:
             perf_data["entry_dates"].add(start_dt.date())
 
         # --- Update Detailed Aggregates (existing logic) ---
+        # Prioritize lookup via ID from map, then name from entry, then "none"
+        proj_name_label = None
+        if proj_id is not None:
+            proj_name_label = project_name_map.get(proj_id)
+        if proj_name_label is None:  # If map lookup failed or proj_id was None
+            proj_name_label = entry.get("project_name")  # Try name from entry
+        proj_name_label = proj_name_label if proj_name_label else "none"  # Default
+
+        task_name_label = None
+        if task_id is not None:
+            task_name_label = task_name_map.get(task_id)
+        if task_name_label is None:  # If map lookup failed or task_id was None
+            task_name_label = entry.get("task_name")  # Try name from entry
+        task_name_label = task_name_label if task_name_label else "none"  # Default
+
         proj_id_label = str(proj_id) if proj_id is not None else "none"
         task_id_label = str(task_id) if task_id is not None else "none"
-        proj_name_label = proj_name if proj_name is not None else "none"
-        task_name_label = task_name if task_name is not None else "none"
 
         label_key = (
-            str(ws_id),
+            ws_id_str,  # Already stringified
             proj_id_label,
             proj_name_label,
             task_id_label,
@@ -648,7 +711,9 @@ def collect_metrics() -> None:
         if default_workspace_id:
             print(f"Using default workspace ID: {default_workspace_id}")
             update_aggregate_metrics(default_workspace_id)
-            update_time_entries_metrics(TIME_ENTRIES_LOOKBACK_HOURS)
+            update_time_entries_metrics(
+                default_workspace_id, TIME_ENTRIES_LOOKBACK_HOURS
+            )
         else:
             print(
                 "Could not determine default workspace ID. "
