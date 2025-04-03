@@ -54,6 +54,17 @@ class TestTogglExporter(unittest.TestCase):
         self.time_entries_duration = exporter.TOGGL_TIME_ENTRIES_DURATION_SECONDS
         self.time_entries_count = exporter.TOGGL_TIME_ENTRIES_COUNT
 
+        # New performance metrics
+        self.time_entries_avg_duration = (
+            exporter.TOGGL_TIME_ENTRIES_AVG_DURATION_SECONDS
+        )
+        self.time_entries_billable_ratio = exporter.TOGGL_TIME_ENTRIES_BILLABLE_RATIO
+        self.time_entries_distinct_days = exporter.TOGGL_DAYS_WITH_TIME_ENTRIES_COUNT
+        self.time_entries_untagged_duration = (
+            exporter.TOGGL_TIME_ENTRIES_UNTAGGED_DURATION_SECONDS
+        )
+        self.time_entries_untagged_count = exporter.TOGGL_TIME_ENTRIES_UNTAGGED_COUNT
+
         # Clear any potential leftover metric values (important for Gauges)
         self.api_errors.clear()
         self.scrape_duration.set(0)  # Set gauge to 0
@@ -64,6 +75,11 @@ class TestTogglExporter(unittest.TestCase):
         self.tags_total.clear()
         self.time_entries_duration.clear()
         self.time_entries_count.clear()
+        self.time_entries_avg_duration.clear()
+        self.time_entries_billable_ratio.clear()
+        self.time_entries_distinct_days.clear()
+        self.time_entries_untagged_duration.clear()
+        self.time_entries_untagged_count.clear()
 
     def tearDown(self):
         # Stop the patcher
@@ -251,7 +267,7 @@ class TestTogglExporter(unittest.TestCase):
         mock_get_me,
     ):
         # Mock return values
-        mock_get_me.return_value = {"default_workspace_id": TEST_WORKSPACE_ID}
+        mock_get_me.return_value = {"id": 1, "default_workspace_id": TEST_WORKSPACE_ID}
         mock_current_entry = {"id": 123, "workspace_id": TEST_WORKSPACE_ID}
         mock_get_current.return_value = mock_current_entry
 
@@ -281,8 +297,24 @@ class TestTogglExporter(unittest.TestCase):
         "prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_DURATION_SECONDS"
     )
     @patch("prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_COUNT")
+    @patch(
+        "prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_AVG_DURATION_SECONDS"
+    )
+    @patch("prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_BILLABLE_RATIO")
+    @patch(
+        "prometheus_toggl_track_exporter.exporter.TOGGL_DAYS_WITH_TIME_ENTRIES_COUNT"
+    )
+    @patch(
+        "prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_UNTAGGED_DURATION_SECONDS"
+    )
+    @patch("prometheus_toggl_track_exporter.exporter.TOGGL_TIME_ENTRIES_UNTAGGED_COUNT")
     def test_collect_metrics_no_workspace_id(  # noqa: PLR0913
         self,
+        mock_untagged_count,
+        mock_untagged_duration,
+        mock_distinct_days,
+        mock_billable_ratio,
+        mock_avg_duration,
         mock_time_count,
         mock_time_duration,
         mock_tags_total,
@@ -318,6 +350,11 @@ class TestTogglExporter(unittest.TestCase):
         mock_tags_total.clear.assert_called_once()
         mock_time_duration.clear.assert_called_once()
         mock_time_count.clear.assert_called_once()
+        mock_avg_duration.clear.assert_called_once()
+        mock_billable_ratio.clear.assert_called_once()
+        mock_distinct_days.clear.assert_called_once()
+        mock_untagged_duration.clear.assert_called_once()
+        mock_untagged_count.clear.assert_called_once()
 
     def test_update_running_timer_metrics_running(self):
         """Test updating metrics when a timer is running."""
