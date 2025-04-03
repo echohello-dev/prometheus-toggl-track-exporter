@@ -16,7 +16,17 @@ EXPORTER_PORT = int(os.environ.get("EXPORTER_PORT", "9090"))
 # Note: prometheus_client ignores this path
 METRICS_PATH = os.environ.get("METRICS_PATH", "/metrics")
 COLLECTION_INTERVAL = int(os.environ.get("COLLECTION_INTERVAL", "60"))
-TIME_ENTRIES_LOOKBACK_HOURS = int(os.environ.get("TIME_ENTRIES_LOOKBACK_HOURS", "24"))
+# Comma-separated list of lookback periods in hours (e.g., "24,168,720")
+LOOKBACK_HOURS_STR = os.environ.get("TIME_ENTRIES_LOOKBACK_HOURS_LIST", "24")
+TIME_ENTRIES_LOOKBACK_HOURS_LIST = [
+    int(h.strip()) for h in LOOKBACK_HOURS_STR.split(",") if h.strip().isdigit()
+]
+if not TIME_ENTRIES_LOOKBACK_HOURS_LIST:
+    print(
+        "Warning: No valid lookback hours found in "
+        "TIME_ENTRIES_LOOKBACK_HOURS_LIST. Defaulting to [24]."
+    )
+    TIME_ENTRIES_LOOKBACK_HOURS_LIST = [24]
 
 # --- Metrics Definitions ---
 TOGGL_API_ERRORS = Counter(
@@ -24,6 +34,39 @@ TOGGL_API_ERRORS = Counter(
 )
 TOGGL_SCRAPE_DURATION = Gauge(
     "toggl_scrape_duration_seconds", "Time taken to collect Toggl metrics"
+)
+
+# User metrics
+TOGGL_USER_INFO = Gauge(
+    "toggl_user_info",
+    "User information from the /me endpoint",
+    ["user_id", "email", "fullname", "timezone"],
+)
+TOGGL_USER_ACTIVE = Gauge(
+    "toggl_user_active",
+    "Indicates if the user account is active (1=active, 0=inactive)",
+    ["user_id"],
+)
+TOGGL_USER_HAS_PASSWORD = Gauge(
+    "toggl_user_has_password",
+    "Indicates if the user has a password set (1=yes, 0=no)",
+    ["user_id"],
+)
+# Gauges for boolean-like settings (treat strings like 'true'/'false' as 1/0)
+TOGGL_USER_SEND_PRODUCT_EMAILS = Gauge(
+    "toggl_user_send_product_emails",
+    "User preference for receiving product emails (1=yes, 0=no)",
+    ["user_id"],
+)
+TOGGL_USER_SEND_TIMER_NOTIFICATIONS = Gauge(
+    "toggl_user_send_timer_notifications",
+    "User preference for receiving timer notifications (1=yes, 0=no)",
+    ["user_id"],
+)
+TOGGL_USER_SEND_WEEKLY_REPORT = Gauge(
+    "toggl_user_send_weekly_report",
+    "User preference for receiving weekly reports (1=yes, 0=no)",
+    ["user_id"],
 )
 
 # Currently running time entry metrics
@@ -60,8 +103,28 @@ TOGGL_TIME_ENTRY_START_TIMESTAMP = Gauge(
 TOGGL_PROJECTS_TOTAL = Gauge(
     "toggl_projects_total", "Total number of projects", ["workspace_id"]
 )
+TOGGL_PROJECT_INFO = Gauge(
+    "toggl_project_info",
+    "Information about individual projects",
+    [
+        "workspace_id",
+        "project_id",
+        "project_name",
+        "client_id",
+        "client_name",
+        "active",
+        "billable",
+        "is_private",
+        "color",
+    ],
+)
 TOGGL_CLIENTS_TOTAL = Gauge(
     "toggl_clients_total", "Total number of clients", ["workspace_id"]
+)
+TOGGL_CLIENT_INFO = Gauge(
+    "toggl_client_info",
+    "Information about individual clients",
+    ["workspace_id", "client_id", "client_name"],
 )
 TOGGL_TAGS_TOTAL = Gauge("toggl_tags_total", "Total number of tags", ["workspace_id"])
 
@@ -85,6 +148,38 @@ TOGGL_TIME_ENTRIES_COUNT = Gauge(
     "toggl_time_entries_count",
     "Number of completed time entries in the lookback period",
     TIME_ENTRY_LABELS,
+)
+
+# --- New Time Entry Performance Metrics ---
+PERFORMANCE_LABELS = [
+    "workspace_id",
+    "timeframe",  # e.g., "24h"
+]
+TOGGL_TIME_ENTRIES_AVG_DURATION_SECONDS = Gauge(
+    "toggl_time_entries_avg_duration_seconds",
+    "Average duration of completed time entries in the lookback period",
+    PERFORMANCE_LABELS,
+)
+TOGGL_TIME_ENTRIES_BILLABLE_RATIO = Gauge(
+    "toggl_time_entries_billable_ratio",
+    "Ratio of billable time duration to total time duration in the lookback period "
+    "(0.0 to 1.0)",
+    PERFORMANCE_LABELS,
+)
+TOGGL_DAYS_WITH_TIME_ENTRIES_COUNT = Gauge(
+    "toggl_days_with_time_entries_count",
+    "Number of distinct days with completed time entries in the lookback period",
+    PERFORMANCE_LABELS,
+)
+TOGGL_TIME_ENTRIES_UNTAGGED_DURATION_SECONDS = Gauge(
+    "toggl_time_entries_untagged_duration_seconds",
+    "Total duration of completed time entries with no tags in the lookback period",
+    PERFORMANCE_LABELS,
+)
+TOGGL_TIME_ENTRIES_UNTAGGED_COUNT = Gauge(
+    "toggl_time_entries_untagged_count",
+    "Number of completed time entries with no tags in the lookback period",
+    PERFORMANCE_LABELS,
 )
 
 # --- Helper Functions ---
@@ -175,6 +270,15 @@ def get_tags(workspace_id: int) -> Optional[list]:
     return _make_toggl_request(f"/workspaces/{workspace_id}/tags")
 
 
+def get_tasks(workspace_id: int) -> Optional[list]:
+    """Fetches active tasks for a given workspace."""
+    # Note: The API might offer filtering options (e.g., ?active=true)
+    # or might require fetching per project if a workspace-wide endpoint
+    # for *all* tasks isn't available or is too large.
+    # Assuming a workspace-level endpoint exists for simplicity.
+    return _make_toggl_request(f"/workspaces/{workspace_id}/tasks")
+
+
 def get_time_entries(start_date: str, end_date: str) -> Optional[list]:
     """Fetches time entries between start_date and end_date (RFC3339 format)."""
     params = {"start_date": start_date, "end_date": end_date}
@@ -196,6 +300,61 @@ def parse_iso_datetime(dt_str: Optional[str]) -> Optional[datetime]:
     except ValueError:
         print(f"Could not parse datetime string: {dt_str}")
         return None
+
+
+def update_user_metrics(me_data: Optional[dict]) -> Optional[int]:
+    """Updates metrics based on the /me endpoint data."""
+    if not me_data or "id" not in me_data:
+        print("Cannot update user metrics: Missing or invalid /me data.")
+        # Clear potentially stale user metrics if data is missing after success
+        TOGGL_USER_INFO.clear()
+        TOGGL_USER_ACTIVE.clear()
+        TOGGL_USER_HAS_PASSWORD.clear()
+        TOGGL_USER_SEND_PRODUCT_EMAILS.clear()
+        TOGGL_USER_SEND_TIMER_NOTIFICATIONS.clear()
+        TOGGL_USER_SEND_WEEKLY_REPORT.clear()
+        return None
+
+    user_id = str(me_data["id"])
+    email = me_data.get("email", "unknown")
+    fullname = me_data.get("fullname", "unknown")
+    timezone = me_data.get("timezone", "unknown")
+
+    # Set informational gauge
+    # Clear previous labels for this metric before setting new ones
+    TOGGL_USER_INFO.clear()
+    TOGGL_USER_INFO.labels(
+        user_id=user_id, email=email, fullname=fullname, timezone=timezone
+    ).set(1)
+
+    # Helper to convert boolean/string flags to 0 or 1
+    def _flag_to_float(value: bool | str | None) -> float:
+        if isinstance(value, bool):
+            return 1.0 if value else 0.0
+        if isinstance(value, str):
+            return 1.0 if value.lower() == "true" else 0.0
+        # Default to 0 if type is unexpected or value is missing/None
+        return 0.0
+
+    # Update specific gauges
+    TOGGL_USER_ACTIVE.labels(user_id=user_id).set(_flag_to_float(me_data.get("active")))
+    TOGGL_USER_HAS_PASSWORD.labels(user_id=user_id).set(
+        _flag_to_float(me_data.get("hasPassword"))
+    )
+    TOGGL_USER_SEND_PRODUCT_EMAILS.labels(user_id=user_id).set(
+        _flag_to_float(me_data.get("send_product_emails"))
+    )
+    TOGGL_USER_SEND_TIMER_NOTIFICATIONS.labels(user_id=user_id).set(
+        _flag_to_float(me_data.get("send_timer_notifications"))
+    )
+    TOGGL_USER_SEND_WEEKLY_REPORT.labels(user_id=user_id).set(
+        _flag_to_float(
+            me_data.get("send_weekly_report")
+        )  # Note: API doc shows send_weekly_reports (plural)
+    )
+
+    print(f"Updated user metrics for user ID: {user_id}")
+    return me_data.get("default_workspace_id")
 
 
 def update_running_timer_metrics(entry: Optional[dict]) -> None:
@@ -263,94 +422,205 @@ def update_aggregate_metrics(workspace_id: int) -> None:
 
     ws_label = str(workspace_id)
 
-    projects = get_projects(workspace_id)
-    if projects is not None:  # API returns list or null on error
-        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(len(projects))
-    else:
-        # Optionally clear or set to 0 if needed, depends on desired
-        # behavior on error
-        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(0)
-
+    # --- Clients ---
     clients = get_clients(workspace_id)
+    client_map: dict[int, str] = {}
+    # Clear previous client info for this workspace before setting new ones
+    TOGGL_CLIENT_INFO.clear()
+    # Need to selectively clear based on workspace_id if supporting multiple
+    # For now, assumes single workspace context per run.
+
     if clients is not None:
         TOGGL_CLIENTS_TOTAL.labels(workspace_id=ws_label).set(len(clients))
+        for client in clients:
+            client_id = client.get("id")
+            client_name = client.get("name", "unknown")
+            if client_id is not None:
+                client_map[client_id] = client_name
+                TOGGL_CLIENT_INFO.labels(
+                    workspace_id=ws_label,
+                    client_id=str(client_id),
+                    client_name=client_name,
+                ).set(1)
     else:
         TOGGL_CLIENTS_TOTAL.labels(workspace_id=ws_label).set(0)
+        print(f"Could not fetch clients for workspace {ws_label}.")
 
+    # --- Projects ---
+    projects = get_projects(workspace_id)
+    # Clear previous project info for this workspace
+    TOGGL_PROJECT_INFO.clear()
+    # Need selective clear if supporting multiple workspaces simultaneously.
+
+    if projects is not None:
+        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(len(projects))
+        for project in projects:
+            project_id = project.get("id")
+            if project_id is None:
+                continue
+
+            project_name = project.get("name", "unknown")
+            client_id = project.get("client_id")  # Can be null
+            client_name = client_map.get(client_id, "none") if client_id else "none"
+            active = project.get("active", True)  # Default to True if missing?
+            billable = project.get("billable", False)
+            is_private = project.get("is_private", True)  # Check default
+            color = project.get("color", "unknown")
+
+            TOGGL_PROJECT_INFO.labels(
+                workspace_id=ws_label,
+                project_id=str(project_id),
+                project_name=project_name,
+                client_id=str(client_id) if client_id else "none",
+                client_name=client_name,
+                active=str(active),
+                billable=str(billable),
+                is_private=str(is_private),
+                color=color,
+            ).set(1)
+    else:
+        TOGGL_PROJECTS_TOTAL.labels(workspace_id=ws_label).set(0)
+        print(f"Could not fetch projects for workspace {ws_label}.")
+
+    # --- Tags ---
     tags = get_tags(workspace_id)
+    # Note: No TOGGL_TAG_INFO gauge defined currently
     if tags is not None:
         TOGGL_TAGS_TOTAL.labels(workspace_id=ws_label).set(len(tags))
     else:
         TOGGL_TAGS_TOTAL.labels(workspace_id=ws_label).set(0)
 
+    print(f"Updated aggregate metrics for workspace ID: {ws_label}")
 
-def update_time_entries_metrics(lookback_hours: int) -> None:
-    """Fetches and updates metrics for time entries in the lookback period."""
-    now = datetime.now(timezone.utc)
-    start_time = now - timedelta(hours=lookback_hours)
-    start_date_str = start_time.isoformat(timespec="seconds")
-    end_date_str = now.isoformat(timespec="seconds")
-    timeframe_label = f"{lookback_hours}h"
 
-    print(
-        f"Fetching time entries from {start_date_str} to {end_date_str} "
-        f"({timeframe_label})"
-    )
+# --- Time Entry Metrics Helpers (Refactored) ---
 
-    entries = get_time_entries(start_date=start_date_str, end_date=end_date_str)
+# Type alias for clarity
+AggregationState = dict[str, dict]
 
-    # Reset metrics for this timeframe before aggregation
-    # This requires finding all label combinations used with the timeframe
-    # which is complex. A simpler approach is to not reset and rely on
-    # Prometheus staleness, or reset ALL labels (less ideal).
-    # For now, we accumulate into potentially existing values from previous scrapes.
-    # A better approach might be to use a Counter for total counts/duration
-    # if exact point-in-time counts for the window are not strictly needed.
 
-    if entries is None:
-        print("Failed to fetch time entries, skipping update.")
+def _fetch_workspace_mappings(
+    workspace_id: int,
+) -> tuple[dict[int, str], dict[int, str]]:
+    """Fetches and maps project and task names for a workspace."""
+    print(f"Fetching projects and tasks for workspace {workspace_id}...")
+    projects = get_projects(workspace_id)
+    tasks = get_tasks(workspace_id)
+
+    project_name_map: dict[int, str] = {}
+    if projects:
+        project_name_map = {
+            proj["id"]: proj.get("name", "unknown") for proj in projects if "id" in proj
+        }
+    else:
+        print(f"Warning: Could not fetch projects for workspace {workspace_id}.")
+
+    task_name_map: dict[int, str] = {}
+    if tasks:
+        task_name_map = {
+            task["id"]: task.get("name", "unknown") for task in tasks if "id" in task
+        }
+    else:
+        print(
+            f"Info: Could not fetch tasks for workspace {workspace_id}. "
+            f"Task names might be 'none'."
+        )
+    return project_name_map, task_name_map
+
+
+def _process_entry_aggregates(
+    entry: dict,
+    project_name_map: dict[int, str],
+    task_name_map: dict[int, str],
+    aggregation_state: AggregationState,
+    timeframe_label: str,
+) -> None:
+    """Processes a single time entry and updates aggregation dictionaries."""
+    duration = entry.get("duration", 0)
+    # We only care about completed entries (duration > 0)
+    if duration <= 0:
         return
 
-    aggregated_durations: dict[tuple, float] = {}
-    aggregated_counts: dict[tuple, int] = {}
+    ws_id = entry.get("workspace_id")
+    if ws_id is None:
+        return  # Skip entries without workspace ID
+    ws_id_str = str(ws_id)
 
-    for entry in entries:
-        # We only care about completed entries (duration > 0)
-        duration = entry.get("duration", 0)
-        if duration <= 0:
-            continue
+    # Access aggregation dicts from the state
+    ws_performance: dict[str, dict] = aggregation_state["ws_performance"]
+    aggregated_durations: dict[tuple, float] = aggregation_state["aggregated_durations"]
+    aggregated_counts: dict[tuple, int] = aggregation_state["aggregated_counts"]
 
-        ws_id = entry.get("workspace_id", "unknown")
-        proj_id = entry.get("project_id")
-        proj_name = entry.get("project_name")
-        task_id = entry.get("task_id")
-        task_name = entry.get("task_name")
-        tags = ",".join(sorted(entry.get("tags", [])))
-        billable = entry.get("billable", False)
+    # Initialize workspace performance dict if first time seen
+    if ws_id_str not in ws_performance:
+        ws_performance[ws_id_str] = {
+            "total_duration": 0.0,
+            "total_count": 0,
+            "billable_duration": 0.0,
+            "untagged_duration": 0.0,
+            "untagged_count": 0,
+            "entry_dates": set(),
+        }
 
-        proj_id_label = str(proj_id) if proj_id is not None else "none"
-        task_id_label = str(task_id) if task_id is not None else "none"
-        proj_name_label = proj_name if proj_name is not None else "none"
-        task_name_label = task_name if task_name is not None else "none"
+    proj_id = entry.get("project_id")
+    task_id = entry.get("task_id")
+    tags_list = entry.get("tags", [])
+    tags = ",".join(sorted(tags_list))
+    billable = entry.get("billable", False)
+    start_time_str = entry.get("start")
 
-        # Create a unique key for aggregation based on labels
-        label_key = (
-            str(ws_id),
-            proj_id_label,
-            proj_name_label,
-            task_id_label,
-            task_name_label,
-            tags,
-            str(billable),
-            timeframe_label,
-        )
+    # --- Update Performance Aggregates ---
+    perf_data = ws_performance[ws_id_str]
+    perf_data["total_duration"] += duration
+    perf_data["total_count"] += 1
+    if billable:
+        perf_data["billable_duration"] += duration
+    if not tags_list:  # Check original list before joining
+        perf_data["untagged_duration"] += duration
+        perf_data["untagged_count"] += 1
+    start_dt = parse_iso_datetime(start_time_str)
+    if start_dt:
+        perf_data["entry_dates"].add(start_dt.date())
 
-        aggregated_durations[label_key] = (
-            aggregated_durations.get(label_key, 0) + duration
-        )
-        aggregated_counts[label_key] = aggregated_counts.get(label_key, 0) + 1
+    # --- Update Detailed Aggregates (existing logic adaptation) ---
+    proj_name_label = (
+        project_name_map.get(proj_id, entry.get("project_name", "none"))
+        if proj_id
+        else "none"
+    )
+    task_name_label = (
+        task_name_map.get(task_id, entry.get("task_name", "none"))
+        if task_id
+        else "none"
+    )
+    proj_id_label = str(proj_id) if proj_id is not None else "none"
+    task_id_label = str(task_id) if task_id is not None else "none"
 
-    # Set the gauges from aggregated data
+    label_key = (
+        ws_id_str,
+        proj_id_label,
+        proj_name_label,
+        task_id_label,
+        task_name_label,
+        tags,
+        str(billable),
+        timeframe_label,
+    )
+
+    aggregated_durations[label_key] = aggregated_durations.get(label_key, 0) + duration
+    aggregated_counts[label_key] = aggregated_counts.get(label_key, 0) + 1
+
+
+def _set_detailed_entry_metrics(
+    aggregated_durations: dict[tuple, float], aggregated_counts: dict[tuple, int]
+) -> None:
+    """Sets the detailed time entry duration and count metrics."""
+    # Clear previous metrics before setting new ones for this timeframe
+    # Note: This clears *all* labels. Selective clearing per timeframe/workspace
+    # would require storing previous labels or more complex logic.
+    TOGGL_TIME_ENTRIES_DURATION_SECONDS.clear()
+    TOGGL_TIME_ENTRIES_COUNT.clear()
+
     for label_key, total_duration in aggregated_durations.items():
         label_dict = dict(zip(TIME_ENTRY_LABELS, label_key))
         TOGGL_TIME_ENTRIES_DURATION_SECONDS.labels(**label_dict).set(total_duration)
@@ -359,9 +629,121 @@ def update_time_entries_metrics(lookback_hours: int) -> None:
         label_dict = dict(zip(TIME_ENTRY_LABELS, label_key))
         TOGGL_TIME_ENTRIES_COUNT.labels(**label_dict).set(count)
 
+
+def _set_performance_entry_metrics(
+    ws_performance: dict[str, dict], timeframe_label: str
+) -> None:
+    """Sets the performance-related time entry metrics."""
+    # Clear previous metrics for this timeframe (similar caveat as above)
+    TOGGL_TIME_ENTRIES_AVG_DURATION_SECONDS.clear()
+    TOGGL_TIME_ENTRIES_BILLABLE_RATIO.clear()
+    TOGGL_DAYS_WITH_TIME_ENTRIES_COUNT.clear()
+    TOGGL_TIME_ENTRIES_UNTAGGED_DURATION_SECONDS.clear()
+    TOGGL_TIME_ENTRIES_UNTAGGED_COUNT.clear()
+
+    for ws_id_str, perf_data in ws_performance.items():
+        performance_label_dict = {
+            "workspace_id": ws_id_str,
+            "timeframe": timeframe_label,
+        }
+        total_count = perf_data["total_count"]
+        total_duration = perf_data["total_duration"]
+
+        avg_duration = total_duration / total_count if total_count > 0 else 0
+        TOGGL_TIME_ENTRIES_AVG_DURATION_SECONDS.labels(**performance_label_dict).set(
+            avg_duration
+        )
+
+        billable_ratio = (
+            perf_data["billable_duration"] / total_duration if total_duration > 0 else 0
+        )
+        TOGGL_TIME_ENTRIES_BILLABLE_RATIO.labels(**performance_label_dict).set(
+            billable_ratio
+        )
+
+        distinct_days = len(perf_data["entry_dates"])
+        TOGGL_DAYS_WITH_TIME_ENTRIES_COUNT.labels(**performance_label_dict).set(
+            distinct_days
+        )
+
+        TOGGL_TIME_ENTRIES_UNTAGGED_DURATION_SECONDS.labels(
+            **performance_label_dict
+        ).set(perf_data["untagged_duration"])
+        TOGGL_TIME_ENTRIES_UNTAGGED_COUNT.labels(**performance_label_dict).set(
+            perf_data["untagged_count"]
+        )
+
+
+# --- Main Time Entry Metric Update Function (Refactored) ---
+
+
+def update_time_entries_metrics(workspace_id: int, lookback_hours: int) -> None:
+    """
+    Fetches and updates metrics for time entries in the lookback period.
+    Uses helper functions to manage complexity.
+    """
+    now = datetime.now(timezone.utc)
+    start_time = now - timedelta(hours=lookback_hours)
+    start_date_str = start_time.isoformat(timespec="seconds")
+    end_date_str = now.isoformat(timespec="seconds")
+    timeframe_label = f"{lookback_hours}h"
+
     print(
-        f"Updated time entry metrics for {len(aggregated_counts)} label sets "
-        f"({timeframe_label})"
+        f"Fetching time entries from {start_date_str} to {end_date_str} "
+        f"({timeframe_label}) for workspace {workspace_id}"
+    )
+
+    # Fetch mappings
+    project_name_map, task_name_map = _fetch_workspace_mappings(workspace_id)
+
+    # Fetch Time Entries (across all accessible workspaces)
+    all_entries = get_time_entries(start_date=start_date_str, end_date=end_date_str)
+
+    if all_entries is None:
+        print(f"Failed to fetch time entries for {timeframe_label}, skipping update.")
+        # Clear relevant metrics if fetch failed? Or rely on staleness?
+        # Choosing to rely on staleness for now.
+        return
+
+    # Filter entries for the target workspace
+    entries = [e for e in all_entries if e.get("workspace_id") == workspace_id]
+    if not entries:
+        print(
+            f"No completed time entries found for workspace {workspace_id} "
+            f"in {timeframe_label}."
+        )
+        # Clear metrics for this specific workspace/timeframe if no entries found
+        _set_detailed_entry_metrics({}, {})  # Empty dicts clear metrics
+        _set_performance_entry_metrics({}, timeframe_label)
+        return
+
+    # Initialize aggregation dictionaries within a state object
+    aggregation_state: AggregationState = {
+        "ws_performance": {},
+        "aggregated_durations": {},
+        "aggregated_counts": {},
+    }
+
+    # Process each entry using the helper function
+    for entry in entries:
+        _process_entry_aggregates(
+            entry,
+            project_name_map,
+            task_name_map,
+            aggregation_state,
+            timeframe_label,
+        )
+
+    # Set the Prometheus gauges using helper functions, extracting from state
+    _set_detailed_entry_metrics(
+        aggregation_state["aggregated_durations"],
+        aggregation_state["aggregated_counts"],
+    )
+    _set_performance_entry_metrics(aggregation_state["ws_performance"], timeframe_label)
+
+    print(
+        f"Updated time entry metrics for {len(aggregation_state['aggregated_counts'])} detailed label sets "  # noqa: E501
+        f"and {len(aggregation_state['ws_performance'])} workspaces ({timeframe_label})"
     )
 
 
@@ -382,30 +764,40 @@ def collect_metrics() -> None:
         me_data = get_me()
         current_entry = get_current_time_entry()
 
-        default_workspace_id = None
-        if me_data and me_data.get("default_workspace_id"):
-            default_workspace_id = me_data["default_workspace_id"]
-            print(f"Using default workspace ID: {default_workspace_id}")
-        else:
-            print("Could not determine default workspace ID from /me endpoint.")
-            # Decide how to handle this: maybe skip aggregate metrics?
+        # --- Update User Metrics ---
+        # This function now extracts default_workspace_id as well
+        default_workspace_id = update_user_metrics(me_data)
 
-        # --- Update Metrics ---
+        # --- Update Running Timer Metrics ---
         update_running_timer_metrics(current_entry)
 
+        # --- Update Workspace Aggregate & Time Entry Metrics ---
         if default_workspace_id:
+            print(f"Using default workspace ID: {default_workspace_id}")
             update_aggregate_metrics(default_workspace_id)
-            update_time_entries_metrics(TIME_ENTRIES_LOOKBACK_HOURS)
+            # Iterate through configured lookback periods
+            for lookback_hours in TIME_ENTRIES_LOOKBACK_HOURS_LIST:
+                update_time_entries_metrics(default_workspace_id, lookback_hours)
         else:
-            # Reset aggregate & time entry metrics if workspace ID is lost
+            print(
+                "Could not determine default workspace ID. "
+                "Skipping workspace-specific metrics."
+            )
+            # Clear aggregate & time entry metrics if workspace ID is missing
             print(
                 "Clearing aggregate and time entry metrics due to missing workspace ID."
             )
-            TOGGL_PROJECTS_TOTAL.clear()  # Clear all labels
+            TOGGL_PROJECTS_TOTAL.clear()
             TOGGL_CLIENTS_TOTAL.clear()
             TOGGL_TAGS_TOTAL.clear()
             TOGGL_TIME_ENTRIES_DURATION_SECONDS.clear()
             TOGGL_TIME_ENTRIES_COUNT.clear()
+            # Also clear new performance metrics
+            TOGGL_TIME_ENTRIES_AVG_DURATION_SECONDS.clear()
+            TOGGL_TIME_ENTRIES_BILLABLE_RATIO.clear()
+            TOGGL_DAYS_WITH_TIME_ENTRIES_COUNT.clear()
+            TOGGL_TIME_ENTRIES_UNTAGGED_DURATION_SECONDS.clear()
+            TOGGL_TIME_ENTRIES_UNTAGGED_COUNT.clear()
 
         print("Finished collecting Toggl metrics.")
 

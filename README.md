@@ -1,3 +1,5 @@
+![](./docs/images/toggl.png)
+
 # Prometheus Toggl Track Exporter
 
 Extract Toggl Track API metrics via Prometheus with this exporter.
@@ -16,6 +18,9 @@ Extract Toggl Track API metrics via Prometheus with this exporter.
 - Includes Taskfile for command orchestration
 - Manages tool versions with asdf
 - Uses Ruff for lightning-fast Python linting and formatting
+- Includes a pre-configured Grafana dashboard (`grafana/dashboard.json`) for visualizing metrics
+
+![](./docs/images/grafana.png)
 
 ## Metrics
 
@@ -58,6 +63,8 @@ docker run -p 9090:9090 -e TOGGL_API_TOKEN=your_api_token ghcr.io/echohello-dev/
 
 ### Using Docker Compose
 
+The `compose.yaml` file sets up the Toggl Track exporter, a Prometheus instance, and a Grafana instance for visualization.
+
 1.  Copy the example environment file and edit it with your API token:
 
     ```bash
@@ -68,10 +75,15 @@ docker run -p 9090:9090 -e TOGGL_API_TOKEN=your_api_token ghcr.io/echohello-dev/
 2.  Then start the services:
 
     ```bash
-    docker-compose up -d
+    docker compose up -d # Or use 'task docker-compose-up'
     ```
 
-This will start both the Toggl Track exporter and a Prometheus instance configured to scrape metrics from the exporter.
+This will start:
+- The **Toggl Track exporter** (port `9090`)
+- **Prometheus** (port `9091`), pre-configured to scrape the exporter.
+- **Grafana** (port `3000`), pre-configured with Prometheus as a data source and a default Toggl Track dashboard. Credentials are `admin / admin`.
+
+Access Grafana at `http://localhost:3000` to view your metrics.
 
 ### Using Poetry
 

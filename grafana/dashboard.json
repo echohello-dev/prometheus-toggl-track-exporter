@@ -24,7 +24,7 @@
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 0,
-    "id": null,
+    "id": 1,
     "links": [],
     "panels": [
         {
@@ -37,7 +37,7 @@
             },
             "id": 100,
             "panels": [],
-            "title": "Current Timer & Aggregates",
+            "title": "Time Entry Overview",
             "type": "row"
         },
         {
@@ -71,8 +71,7 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "grey",
-                                "value": null
+                                "color": "grey"
                             },
                             {
                                 "color": "grey",
@@ -90,7 +89,7 @@
             },
             "gridPos": {
                 "h": 4,
-                "w": 6,
+                "w": 3,
                 "x": 0,
                 "y": 1
             },
@@ -100,6 +99,7 @@
                 "graphMode": "none",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -107,9 +107,11 @@
                     "fields": "",
                     "values": false
                 },
-                "textMode": "value_and_name"
+                "showPercentChange": false,
+                "textMode": "value_and_name",
+                "wideLayout": true
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
@@ -137,15 +139,27 @@
                     "color": {
                         "mode": "palette-classic"
                     },
-                    "custom": {},
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
                     "unit": "s"
                 },
                 "overrides": []
             },
             "gridPos": {
                 "h": 4,
-                "w": 6,
-                "x": 6,
+                "w": 3,
+                "x": 3,
                 "y": 1
             },
             "id": 2,
@@ -154,6 +168,7 @@
                 "graphMode": "none",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -161,9 +176,11 @@
                     "fields": "",
                     "values": false
                 },
-                "textMode": "value"
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
@@ -189,35 +206,82 @@
             "fieldConfig": {
                 "defaults": {
                     "color": {
-                        "mode": "palette-classic"
+                        "mode": "thresholds"
                     },
-                    "custom": {},
-                    "unit": "short"
+                    "custom": {
+                        "axisPlacement": "auto",
+                        "fillOpacity": 70,
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "insertNulls": false,
+                        "lineWidth": 0,
+                        "spanNulls": false
+                    },
+                    "mappings": [
+                        {
+                            "options": {
+                                "0": {
+                                    "color": "grey",
+                                    "index": 1,
+                                    "text": "Stopped"
+                                },
+                                "1": {
+                                    "color": "green",
+                                    "index": 0,
+                                    "text": "Running"
+                                }
+                            },
+                            "type": "value"
+                        }
+                    ],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "grey"
+                            },
+                            {
+                                "color": "grey",
+                                "value": 0
+                            },
+                            {
+                                "color": "green",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "unit": "none"
                 },
                 "overrides": []
             },
             "gridPos": {
                 "h": 4,
-                "w": 4,
-                "x": 12,
+                "w": 12,
+                "x": 6,
                 "y": 1
             },
-            "id": 3,
+            "id": 20,
             "options": {
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
+                "alignValue": "left",
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": true
                 },
-                "textMode": "value"
+                "mergeValues": true,
+                "rowHeight": 0.9,
+                "showValue": "auto",
+                "tooltip": {
+                    "hideZeros": false,
+                    "mode": "single",
+                    "sort": "none"
+                },
+                "wideLayout": true
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
@@ -225,14 +289,15 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "max(toggl_projects_total)",
-                    "instant": true,
-                    "legendFormat": "Projects",
+                    "expr": "toggl_time_entry_running",
+                    "instant": false,
+                    "legendFormat": "Timer Status",
+                    "range": true,
                     "refId": "A"
                 }
             ],
-            "title": "Total Projects",
-            "type": "stat"
+            "title": "Timer Status History",
+            "type": "state-timeline"
         },
         {
             "datasource": {
@@ -244,16 +309,28 @@
                     "color": {
                         "mode": "palette-classic"
                     },
-                    "custom": {},
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
                     "unit": "short"
                 },
                 "overrides": []
             },
             "gridPos": {
                 "h": 4,
-                "w": 4,
-                "x": 16,
-                "y": 1
+                "w": 3,
+                "x": 0,
+                "y": 5
             },
             "id": 4,
             "options": {
@@ -261,6 +338,7 @@
                 "graphMode": "none",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -268,9 +346,11 @@
                     "fields": "",
                     "values": false
                 },
-                "textMode": "value"
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
@@ -297,16 +377,28 @@
                     "color": {
                         "mode": "palette-classic"
                     },
-                    "custom": {},
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
                     "unit": "short"
                 },
                 "overrides": []
             },
             "gridPos": {
                 "h": 4,
-                "w": 4,
-                "x": 20,
-                "y": 1
+                "w": 3,
+                "x": 3,
+                "y": 5
             },
             "id": 5,
             "options": {
@@ -314,6 +406,7 @@
                 "graphMode": "none",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -321,9 +414,11 @@
                     "fields": "",
                     "values": false
                 },
-                "textMode": "value"
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
@@ -341,16 +436,294 @@
             "type": "stat"
         },
         {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 3,
+                "x": 6,
+                "y": 5
+            },
+            "id": 14,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.6.0",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "editorMode": "code",
+                    "expr": "max(toggl_time_entries_untagged_count{timeframe=\"$timeframe\"})",
+                    "instant": true,
+                    "legendFormat": "Untagged Entries ($timeframe)",
+                    "range": false,
+                    "refId": "A"
+                }
+            ],
+            "title": "Untagged Entries ($timeframe)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "percentunit"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 3,
+                "x": 9,
+                "y": 5
+            },
+            "id": 12,
+            "options": {
+                "colorMode": "value",
+                "displayMode": "lcd",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "minVizHeight": 75,
+                "minVizWidth": 75,
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true,
+                "sizing": "auto",
+                "textMode": "value"
+            },
+            "pluginVersion": "11.6.0",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "editorMode": "code",
+                    "expr": "max(toggl_time_entries_billable_ratio{timeframe=\"$timeframe\"})",
+                    "instant": true,
+                    "legendFormat": "Billable Ratio ($timeframe)",
+                    "range": false,
+                    "refId": "A"
+                }
+            ],
+            "title": "Billable Ratio ($timeframe)",
+            "type": "gauge"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 3,
+                "x": 12,
+                "y": 5
+            },
+            "id": 10,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.6.0",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "editorMode": "code",
+                    "expr": "max(toggl_time_entries_avg_duration_seconds{timeframe=\"$timeframe\"})",
+                    "instant": true,
+                    "legendFormat": "Avg Duration ($timeframe)",
+                    "range": false,
+                    "refId": "A"
+                }
+            ],
+            "title": "Avg Entry Duration ($timeframe)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 3,
+                "x": 15,
+                "y": 5
+            },
+            "id": 3,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.6.0",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "editorMode": "code",
+                    "expr": "max(toggl_projects_total)",
+                    "instant": true,
+                    "legendFormat": "Projects",
+                    "refId": "A"
+                }
+            ],
+            "title": "Total Projects",
+            "type": "stat"
+        },
+        {
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 5
+                "y": 9
             },
             "id": 101,
             "panels": [],
-            "title": "Time Entry History (Last Lookback Period)",
+            "title": "Time Entry Details (Lookback Period)",
             "type": "row"
         },
         {
@@ -364,11 +737,11 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
+                        "axisBorderShow": false,
                         "axisCenteredZero": false,
+                        "axisColorMode": "text",
                         "axisLabel": "",
                         "axisPlacement": "auto",
-                        "barAlignment": 0,
-                        "drawStyle": "bars",
                         "fillOpacity": 80,
                         "gradientMode": "none",
                         "hideFrom": {
@@ -376,20 +749,192 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "lineInterpolation": "linear",
                         "lineWidth": 1,
-                        "pointSize": 5,
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "never",
-                        "spanNulls": false,
-                        "stacking": {
-                            "group": "A",
-                            "mode": "none"
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 10
+            },
+            "id": 6,
+            "options": {
+                "barRadius": 0,
+                "barWidth": 0.97,
+                "fullHighlight": false,
+                "groupWidth": 0.7,
+                "legend": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right",
+                    "showLegend": true
+                },
+                "orientation": "auto",
+                "showValue": "auto",
+                "stacking": "none",
+                "tooltip": {
+                    "hideZeros": false,
+                    "mode": "multi",
+                    "sort": "desc"
+                },
+                "xTickLabelRotation": 0,
+                "xTickLabelSpacing": 0
+            },
+            "pluginVersion": "11.6.0",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "editorMode": "code",
+                    "expr": "sum by (project_name) (toggl_time_entries_duration_seconds{timeframe=\"$timeframe\"})",
+                    "instant": true,
+                    "legendFormat": "{{project_name}}",
+                    "range": false,
+                    "refId": "A"
+                }
+            ],
+            "title": "Total Duration by Project ($timeframe)",
+            "type": "barchart"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "fillOpacity": 80,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineWidth": 1,
+                        "scaleDistribution": {
+                            "type": "linear"
                         },
                         "thresholdsStyle": {
                             "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green"
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 10
+            },
+            "id": 7,
+            "options": {
+                "barRadius": 0,
+                "barWidth": 0.97,
+                "fullHighlight": false,
+                "groupWidth": 0.7,
+                "legend": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right",
+                    "showLegend": true
+                },
+                "orientation": "auto",
+                "showValue": "auto",
+                "stacking": "none",
+                "tooltip": {
+                    "hideZeros": false,
+                    "mode": "multi",
+                    "sort": "desc"
+                },
+                "xTickLabelRotation": 0,
+                "xTickLabelSpacing": 0
+            },
+            "pluginVersion": "11.6.0",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "editorMode": "code",
+                    "expr": "sum by (project_name) (toggl_time_entries_count{timeframe=\"$timeframe\"})",
+                    "instant": true,
+                    "legendFormat": "{{project_name}}",
+                    "range": false,
+                    "refId": "A"
+                }
+            ],
+            "title": "Completed Entries Count by Project ($timeframe)",
+            "type": "barchart"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
                         }
                     },
                     "mappings": [],
@@ -399,26 +944,40 @@
             },
             "gridPos": {
                 "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 6
+                "w": 8,
+                "x": 16,
+                "y": 10
             },
-            "id": 6,
+            "id": 21,
             "options": {
+                "displayLabels": [
+                    "name",
+                    "percent"
+                ],
                 "legend": {
+                    "displayMode": "list",
+                    "placement": "right",
+                    "showLegend": true,
+                    "values": [
+                        "value",
+                        "percent"
+                    ]
+                },
+                "pieType": "pie",
+                "reduceOptions": {
                     "calcs": [
                         "sum"
                     ],
-                    "displayMode": "table",
-                    "placement": "right",
-                    "showLegend": true
+                    "fields": "",
+                    "values": false
                 },
                 "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
+                    "hideZeros": false,
+                    "mode": "single",
+                    "sort": "none"
                 }
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
@@ -426,73 +985,16 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "sum by (project_name) (toggl_time_entries_duration_seconds{timeframe=\\\"24h\\\"})",
+                    "expr": "sum by (project_name) (toggl_time_entries_duration_seconds{timeframe=\"$timeframe\"})",
+                    "format": "table",
                     "instant": true,
                     "legendFormat": "{{project_name}}",
                     "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "Total Duration by Project (Lookback Period)",
-            "type": "barchart"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "drawStyle": "bars",
-                        "fillOpacity": 80,
-                        "showPoints": "never"
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 6
-            },
-            "id": 7,
-            "options": {
-                "legend": {
-                    "calcs": [
-                        "sum"
-                    ],
-                    "displayMode": "table",
-                    "placement": "right",
-                    "showLegend": true
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "pluginVersion": "11.x",
-            "targets": [
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus"
-                    },
-                    "editorMode": "code",
-                    "expr": "sum by (project_name) (toggl_time_entries_count{timeframe=\\\"24h\\\"})",
-                    "instant": true,
-                    "legendFormat": "{{project_name}}",
-                    "range": false,
-                    "refId": "A"
-                }
-            ],
-            "title": "Completed Entries Count by Project (Lookback Period)",
-            "type": "barchart"
+            "title": "Project Duration Distribution ($timeframe)",
+            "type": "piechart"
         },
         {
             "collapsed": false,
@@ -500,11 +1002,11 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 14
+                "y": 18
             },
-            "id": 102,
+            "id": 104,
             "panels": [],
-            "title": "Exporter Health",
+            "title": "Workspace Details",
             "type": "row"
         },
         {
@@ -518,63 +1020,143 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "drawStyle": "line",
-                        "fillOpacity": 10
+                        "align": "auto",
+                        "cellOptions": {
+                            "type": "auto"
+                        },
+                        "inspect": false
                     },
                     "mappings": [],
                     "thresholds": {
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green",
-                                "value": null
-                            },
+                                "color": "green"
+                            }
+                        ]
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "project_name"
+                        },
+                        "properties": [
                             {
-                                "color": "red",
-                                "value": 15
+                                "id": "color",
+                                "value": {
+                                    "field": "color",
+                                    "mode": "thresholds"
+                                }
                             }
                         ]
                     },
-                    "unit": "s"
-                },
-                "overrides": []
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "active"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.cellOptions",
+                                "value": {
+                                    "type": "boolean"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "billable"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.cellOptions",
+                                "value": {
+                                    "type": "boolean"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "is_private"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.cellOptions",
+                                "value": {
+                                    "type": "boolean"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "color"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.hidden",
+                                "value": true
+                            }
+                        ]
+                    }
+                ]
             },
             "gridPos": {
-                "h": 8,
-                "w": 12,
+                "h": 9,
+                "w": 24,
                 "x": 0,
-                "y": 15
+                "y": 19
             },
-            "id": 11,
+            "id": 22,
             "options": {
-                "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": false
+                "cellHeight": "sm",
+                "footer": {
+                    "countRows": false,
+                    "fields": "",
+                    "reducer": [
+                        "sum"
+                    ],
+                    "show": false
                 },
-                "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
-                }
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "desc": false,
+                        "displayName": "project_name"
+                    }
+                ]
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
                         "type": "prometheus",
                         "uid": "prometheus"
                     },
-                    "editorMode": "code",
-                    "expr": "toggl_scrape_duration_seconds",
-                    "instant": false,
-                    "legendFormat": "Scrape Duration",
-                    "range": true,
+                    "editorMode": "builder",
+                    "expr": "max by (project_name, client_name, active, billable, is_private, color) (toggl_project_info)",
+                    "format": "table",
+                    "instant": true,
+                    "legendFormat": "",
+                    "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "Exporter Scrape Duration",
-            "type": "timeseries"
+            "title": "Projects",
+            "transformations": [
+                {
+                    "id": "labelsToFields",
+                    "options": {}
+                }
+            ],
+            "type": "table"
         },
         {
             "datasource": {
@@ -587,48 +1169,50 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisPlacement": "right",
-                        "drawStyle": "line",
-                        "fillOpacity": 10
+                        "align": "auto",
+                        "cellOptions": {
+                            "type": "auto"
+                        },
+                        "inspect": false
                     },
                     "mappings": [],
                     "thresholds": {
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 0.1
+                                "color": "green"
                             }
                         ]
-                    },
-                    "unit": "eps"
+                    }
                 },
                 "overrides": []
             },
             "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 15
+                "h": 9,
+                "w": 24,
+                "x": 0,
+                "y": 28
             },
-            "id": 13,
+            "id": 23,
             "options": {
-                "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": true
+                "cellHeight": "sm",
+                "footer": {
+                    "countRows": false,
+                    "fields": "",
+                    "reducer": [
+                        "sum"
+                    ],
+                    "show": false
                 },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "none"
-                }
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "desc": false,
+                        "displayName": "client_name"
+                    }
+                ]
             },
-            "pluginVersion": "11.x",
+            "pluginVersion": "11.6.0",
             "targets": [
                 {
                     "datasource": {
@@ -636,25 +1220,289 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "sum by (endpoint) (rate(toggl_api_errors_total[$__rate_interval]))",
-                    "instant": false,
-                    "legendFormat": "{{endpoint}}",
-                    "range": true,
+                    "expr": "max by (client_name) (toggl_client_info)",
+                    "format": "table",
+                    "instant": true,
+                    "legendFormat": "",
+                    "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "API Error Rate",
-            "type": "timeseries"
+            "title": "Clients",
+            "transformations": [
+                {
+                    "id": "labelsToFields",
+                    "options": {}
+                }
+            ],
+            "type": "table"
+        },
+        {
+            "collapsed": true,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 37
+            },
+            "id": 102,
+            "panels": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "fieldConfig": {
+                        "defaults": {
+                            "color": {
+                                "mode": "palette-classic"
+                            },
+                            "custom": {
+                                "axisBorderShow": false,
+                                "axisCenteredZero": false,
+                                "axisColorMode": "text",
+                                "axisLabel": "",
+                                "axisPlacement": "auto",
+                                "barAlignment": 0,
+                                "barWidthFactor": 0.6,
+                                "drawStyle": "line",
+                                "fillOpacity": 10,
+                                "gradientMode": "none",
+                                "hideFrom": {
+                                    "legend": false,
+                                    "tooltip": false,
+                                    "viz": false
+                                },
+                                "insertNulls": false,
+                                "lineInterpolation": "linear",
+                                "lineWidth": 1,
+                                "pointSize": 5,
+                                "scaleDistribution": {
+                                    "type": "linear"
+                                },
+                                "showPoints": "auto",
+                                "spanNulls": false,
+                                "stacking": {
+                                    "group": "A",
+                                    "mode": "none"
+                                },
+                                "thresholdsStyle": {
+                                    "mode": "off"
+                                }
+                            },
+                            "mappings": [],
+                            "thresholds": {
+                                "mode": "absolute",
+                                "steps": [
+                                    {
+                                        "color": "green"
+                                    },
+                                    {
+                                        "color": "red",
+                                        "value": 15
+                                    }
+                                ]
+                            },
+                            "unit": "s"
+                        },
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 0,
+                        "y": 28
+                    },
+                    "id": 15,
+                    "options": {
+                        "legend": {
+                            "calcs": [],
+                            "displayMode": "list",
+                            "placement": "bottom",
+                            "showLegend": false
+                        },
+                        "tooltip": {
+                            "hideZeros": false,
+                            "mode": "multi",
+                            "sort": "none"
+                        }
+                    },
+                    "pluginVersion": "11.6.0",
+                    "targets": [
+                        {
+                            "datasource": {
+                                "type": "prometheus",
+                                "uid": "prometheus"
+                            },
+                            "editorMode": "code",
+                            "expr": "sum by (generation) (rate(python_gc_collections_total[$__rate_interval]))",
+                            "instant": false,
+                            "legendFormat": "Gen {{generation}}",
+                            "range": true,
+                            "refId": "A"
+                        }
+                    ],
+                    "title": "GC Collection Rate by Generation",
+                    "type": "timeseries"
+                },
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "fieldConfig": {
+                        "defaults": {
+                            "color": {
+                                "mode": "palette-classic"
+                            },
+                            "custom": {
+                                "axisBorderShow": false,
+                                "axisCenteredZero": false,
+                                "axisColorMode": "text",
+                                "axisLabel": "",
+                                "axisPlacement": "auto",
+                                "barAlignment": 0,
+                                "barWidthFactor": 0.6,
+                                "drawStyle": "line",
+                                "fillOpacity": 10,
+                                "gradientMode": "none",
+                                "hideFrom": {
+                                    "legend": false,
+                                    "tooltip": false,
+                                    "viz": false
+                                },
+                                "insertNulls": false,
+                                "lineInterpolation": "linear",
+                                "lineWidth": 1,
+                                "pointSize": 5,
+                                "scaleDistribution": {
+                                    "type": "linear"
+                                },
+                                "showPoints": "auto",
+                                "spanNulls": false,
+                                "stacking": {
+                                    "group": "A",
+                                    "mode": "normal"
+                                },
+                                "thresholdsStyle": {
+                                    "mode": "off"
+                                }
+                            },
+                            "mappings": [],
+                            "thresholds": {
+                                "mode": "absolute",
+                                "steps": [
+                                    {
+                                        "color": "green"
+                                    },
+                                    {
+                                        "color": "red",
+                                        "value": 80
+                                    }
+                                ]
+                            },
+                            "unit": "short"
+                        },
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 12,
+                        "y": 28
+                    },
+                    "id": 16,
+                    "options": {
+                        "legend": {
+                            "calcs": [],
+                            "displayMode": "list",
+                            "placement": "bottom",
+                            "showLegend": true
+                        },
+                        "tooltip": {
+                            "hideZeros": false,
+                            "mode": "multi",
+                            "sort": "none"
+                        }
+                    },
+                    "pluginVersion": "11.6.0",
+                    "targets": [
+                        {
+                            "datasource": {
+                                "type": "prometheus",
+                                "uid": "prometheus"
+                            },
+                            "editorMode": "code",
+                            "expr": "sum by (generation) (rate(python_gc_objects_collected_total[$__rate_interval]))",
+                            "instant": false,
+                            "legendFormat": "Gen {{generation}}",
+                            "range": true,
+                            "refId": "A"
+                        }
+                    ],
+                    "title": "GC Objects Collected Rate by Generation",
+                    "type": "timeseries"
+                }
+            ],
+            "title": "Exporter Internals (Python GC)",
+            "type": "row"
         }
     ],
+    "preload": false,
     "refresh": "1m",
-    "schemaVersion": 39,
+    "schemaVersion": 41,
     "tags": [
-        "toggl",
-        "exporter"
+        "toggl"
     ],
     "templating": {
-        "list": []
+        "list": [
+            {
+                "current": {
+                    "text": "All",
+                    "value": "$__all"
+                },
+                "datasource": {
+                    "type": "grafana",
+                    "uid": "-- Grafana --"
+                },
+                "definition": "label_values(toggl_time_entry_running, project_name)",
+                "includeAll": true,
+                "name": "project",
+                "options": [],
+                "query": {
+                    "query": "label_values(toggl_time_entry_running, project_name)",
+                    "refId": "StandardVariableQuery"
+                },
+                "type": "query"
+            },
+            {
+                "current": {
+                    "selected": true,
+                    "text": "24h",
+                    "value": "24h"
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                },
+                "definition": "label_values(toggl_time_entries_duration_seconds, timeframe)",
+                "hide": 0,
+                "includeAll": false,
+                "label": "Timeframe",
+                "multi": false,
+                "name": "timeframe",
+                "options": [],
+                "query": {
+                    "query": "label_values(toggl_time_entries_duration_seconds, timeframe)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "regex": "",
+                "skipUrlSync": false,
+                "sort": 1,
+                "type": "query"
+            }
+        ]
     },
     "time": {
         "from": "now-6h",
@@ -662,8 +1510,7 @@
     },
     "timepicker": {},
     "timezone": "",
-    "title": "Toggl Track Exporter Overview",
-    "uid": "toggl-track-overview",
-    "version": 1,
-    "weekStart": ""
+    "title": "Toggl Track / Overview",
+    "uid": "toggl-overview",
+    "version": 7
 }
