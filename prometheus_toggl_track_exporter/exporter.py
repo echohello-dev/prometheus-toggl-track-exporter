@@ -26,6 +26,39 @@ TOGGL_SCRAPE_DURATION = Gauge(
     "toggl_scrape_duration_seconds", "Time taken to collect Toggl metrics"
 )
 
+# User metrics
+TOGGL_USER_INFO = Gauge(
+    "toggl_user_info",
+    "User information from the /me endpoint",
+    ["user_id", "email", "fullname", "timezone"],
+)
+TOGGL_USER_ACTIVE = Gauge(
+    "toggl_user_active",
+    "Indicates if the user account is active (1=active, 0=inactive)",
+    ["user_id"],
+)
+TOGGL_USER_HAS_PASSWORD = Gauge(
+    "toggl_user_has_password",
+    "Indicates if the user has a password set (1=yes, 0=no)",
+    ["user_id"],
+)
+# Gauges for boolean-like settings (treat strings like 'true'/'false' as 1/0)
+TOGGL_USER_SEND_PRODUCT_EMAILS = Gauge(
+    "toggl_user_send_product_emails",
+    "User preference for receiving product emails (1=yes, 0=no)",
+    ["user_id"],
+)
+TOGGL_USER_SEND_TIMER_NOTIFICATIONS = Gauge(
+    "toggl_user_send_timer_notifications",
+    "User preference for receiving timer notifications (1=yes, 0=no)",
+    ["user_id"],
+)
+TOGGL_USER_SEND_WEEKLY_REPORT = Gauge(
+    "toggl_user_send_weekly_report",
+    "User preference for receiving weekly reports (1=yes, 0=no)",
+    ["user_id"],
+)
+
 # Currently running time entry metrics
 TOGGL_TIME_ENTRY_RUNNING = Gauge(
     "toggl_time_entry_running",
@@ -196,6 +229,61 @@ def parse_iso_datetime(dt_str: Optional[str]) -> Optional[datetime]:
     except ValueError:
         print(f"Could not parse datetime string: {dt_str}")
         return None
+
+
+def update_user_metrics(me_data: Optional[dict]) -> Optional[int]:
+    """Updates metrics based on the /me endpoint data."""
+    if not me_data or "id" not in me_data:
+        print("Cannot update user metrics: Missing or invalid /me data.")
+        # Clear potentially stale user metrics if data is missing after success
+        TOGGL_USER_INFO.clear()
+        TOGGL_USER_ACTIVE.clear()
+        TOGGL_USER_HAS_PASSWORD.clear()
+        TOGGL_USER_SEND_PRODUCT_EMAILS.clear()
+        TOGGL_USER_SEND_TIMER_NOTIFICATIONS.clear()
+        TOGGL_USER_SEND_WEEKLY_REPORT.clear()
+        return None
+
+    user_id = str(me_data["id"])
+    email = me_data.get("email", "unknown")
+    fullname = me_data.get("fullname", "unknown")
+    timezone = me_data.get("timezone", "unknown")
+
+    # Set informational gauge
+    # Clear previous labels for this metric before setting new ones
+    TOGGL_USER_INFO.clear()
+    TOGGL_USER_INFO.labels(
+        user_id=user_id, email=email, fullname=fullname, timezone=timezone
+    ).set(1)
+
+    # Helper to convert boolean/string flags to 0 or 1
+    def _flag_to_float(value) -> float:
+        if isinstance(value, bool):
+            return 1.0 if value else 0.0
+        if isinstance(value, str):
+            return 1.0 if value.lower() == "true" else 0.0
+        # Default to 0 if type is unexpected or value is missing/None
+        return 0.0
+
+    # Update specific gauges
+    TOGGL_USER_ACTIVE.labels(user_id=user_id).set(_flag_to_float(me_data.get("active")))
+    TOGGL_USER_HAS_PASSWORD.labels(user_id=user_id).set(
+        _flag_to_float(me_data.get("hasPassword"))
+    )
+    TOGGL_USER_SEND_PRODUCT_EMAILS.labels(user_id=user_id).set(
+        _flag_to_float(me_data.get("send_product_emails"))
+    )
+    TOGGL_USER_SEND_TIMER_NOTIFICATIONS.labels(user_id=user_id).set(
+        _flag_to_float(me_data.get("send_timer_notifications"))
+    )
+    TOGGL_USER_SEND_WEEKLY_REPORT.labels(user_id=user_id).set(
+        _flag_to_float(
+            me_data.get("send_weekly_report")
+        )  # Note: API doc shows send_weekly_reports (plural)
+    )
+
+    print(f"Updated user metrics for user ID: {user_id}")
+    return me_data.get("default_workspace_id")
 
 
 def update_running_timer_metrics(entry: Optional[dict]) -> None:
@@ -382,26 +470,28 @@ def collect_metrics() -> None:
         me_data = get_me()
         current_entry = get_current_time_entry()
 
-        default_workspace_id = None
-        if me_data and me_data.get("default_workspace_id"):
-            default_workspace_id = me_data["default_workspace_id"]
-            print(f"Using default workspace ID: {default_workspace_id}")
-        else:
-            print("Could not determine default workspace ID from /me endpoint.")
-            # Decide how to handle this: maybe skip aggregate metrics?
+        # --- Update User Metrics ---
+        # This function now extracts default_workspace_id as well
+        default_workspace_id = update_user_metrics(me_data)
 
-        # --- Update Metrics ---
+        # --- Update Running Timer Metrics ---
         update_running_timer_metrics(current_entry)
 
+        # --- Update Workspace Aggregate & Time Entry Metrics ---
         if default_workspace_id:
+            print(f"Using default workspace ID: {default_workspace_id}")
             update_aggregate_metrics(default_workspace_id)
             update_time_entries_metrics(TIME_ENTRIES_LOOKBACK_HOURS)
         else:
-            # Reset aggregate & time entry metrics if workspace ID is lost
+            print(
+                "Could not determine default workspace ID. "
+                "Skipping workspace-specific metrics."
+            )
+            # Clear aggregate & time entry metrics if workspace ID is missing
             print(
                 "Clearing aggregate and time entry metrics due to missing workspace ID."
             )
-            TOGGL_PROJECTS_TOTAL.clear()  # Clear all labels
+            TOGGL_PROJECTS_TOTAL.clear()
             TOGGL_CLIENTS_TOTAL.clear()
             TOGGL_TAGS_TOTAL.clear()
             TOGGL_TIME_ENTRIES_DURATION_SECONDS.clear()
