@@ -279,9 +279,14 @@ class TestTogglExporter(unittest.TestCase):
         mock_get_current.assert_called_once()
         mock_update_running.assert_called_once_with(mock_current_entry)
         mock_update_aggregate.assert_called_once_with(TEST_WORKSPACE_ID)
-        mock_update_time_entries.assert_called_once_with(
-            exporter.TIME_ENTRIES_LOOKBACK_HOURS
-        )
+        # Check that update_time_entries_metrics was called for each lookback hour
+        expected_calls = [
+            unittest.mock.call(TEST_WORKSPACE_ID, hour)
+            for hour in exporter.TIME_ENTRIES_LOOKBACK_HOURS_LIST
+        ]
+        mock_update_time_entries.assert_has_calls(expected_calls, any_order=True)
+        assert mock_update_time_entries.call_count == len(expected_calls)
+
         # Verify scrape duration was measured (value > 0)
         assert exporter.TOGGL_SCRAPE_DURATION.collect()[0].samples[0].value > 0
 
@@ -514,7 +519,11 @@ class TestTogglExporter(unittest.TestCase):
         )
 
     @patch("prometheus_toggl_track_exporter.exporter.get_time_entries")
-    def test_update_time_entries_metrics_success(self, mock_get_time_entries):
+    @patch("prometheus_toggl_track_exporter.exporter.get_projects")
+    @patch("prometheus_toggl_track_exporter.exporter.get_tasks")
+    def test_update_time_entries_metrics_success(
+        self, mock_get_tasks, mock_get_projects, mock_get_time_entries
+    ):
         """Test updating time entry aggregate metrics successfully."""
         lookback_hours = 24
         timeframe_label = f"{lookback_hours}h"
@@ -533,8 +542,32 @@ class TestTogglExporter(unittest.TestCase):
         expected_agg_count_1_2 = 2
         expected_agg_count_3 = 1
         expected_agg_count_4 = 1
+        # Calculate performance metric expectations
+        total_duration = (
+            entry1_duration + entry2_duration + entry3_duration + entry4_duration
+        )
+        total_count = (
+            expected_agg_count_1_2 + expected_agg_count_3 + expected_agg_count_4
+        )
+        billable_duration = entry1_duration + entry2_duration
+        untagged_duration = entry4_duration
+        untagged_count = expected_agg_count_4
+        expected_avg_duration = total_duration / total_count if total_count else 0
+        expected_billable_ratio = (
+            billable_duration / total_duration if total_duration else 0
+        )
+        expected_distinct_days = 1  # All entries are within the same 'now' day
 
-        # Mock API response
+        # Mock project/task data
+        mock_projects_data = [
+            {"id": TEST_PROJECT_ID, "name": TEST_PROJECT_NAME},
+            {"id": 55555, "name": "Project B"},
+        ]
+        mock_tasks_data = [{"id": TEST_TASK_ID, "name": TEST_TASK_NAME}]
+        mock_get_projects.return_value = mock_projects_data
+        mock_get_tasks.return_value = mock_tasks_data
+
+        # Mock API response for time entries
         mock_entries = [
             # Entry 1: Project A, Task 1, Tag1, Billable
             {
@@ -610,9 +643,11 @@ class TestTogglExporter(unittest.TestCase):
         mock_get_time_entries.return_value = mock_entries
 
         # Run the function
-        exporter.update_time_entries_metrics(lookback_hours)
+        exporter.update_time_entries_metrics(TEST_WORKSPACE_ID, lookback_hours)
 
-        # Verify API call
+        # Verify API calls
+        mock_get_projects.assert_called_once_with(TEST_WORKSPACE_ID)
+        mock_get_tasks.assert_called_once_with(TEST_WORKSPACE_ID)
         mock_get_time_entries.assert_called_once_with(
             start_date=start_iso, end_date=end_iso
         )
@@ -675,12 +710,44 @@ class TestTogglExporter(unittest.TestCase):
             == expected_agg_count_4
         )
 
+        # --- Verify Performance Metrics ---
+        perf_labels = {
+            "workspace_id": str(TEST_WORKSPACE_ID),
+            "timeframe": timeframe_label,
+        }
+        assert (
+            self.time_entries_avg_duration.labels(**perf_labels)._value.get()
+            == expected_avg_duration
+        )
+        assert (
+            self.time_entries_billable_ratio.labels(**perf_labels)._value.get()
+            == expected_billable_ratio
+        )
+        assert (
+            self.time_entries_distinct_days.labels(**perf_labels)._value.get()
+            == expected_distinct_days
+        )
+        assert (
+            self.time_entries_untagged_duration.labels(**perf_labels)._value.get()
+            == untagged_duration
+        )
+        assert (
+            self.time_entries_untagged_count.labels(**perf_labels)._value.get()
+            == untagged_count
+        )
+
     @patch("prometheus_toggl_track_exporter.exporter.get_time_entries")
-    def test_update_time_entries_metrics_api_error(self, mock_get_time_entries):
+    @patch("prometheus_toggl_track_exporter.exporter.get_projects")
+    @patch("prometheus_toggl_track_exporter.exporter.get_tasks")
+    def test_update_time_entries_metrics_api_error(
+        self, mock_get_tasks, mock_get_projects, mock_get_time_entries
+    ):
         """Test time entry metrics update when API call fails."""
         lookback_hours = 1
         expected_dummy_count = 5
         mock_get_time_entries.return_value = None  # Simulate API error
+        mock_get_projects.return_value = []  # Need to mock these even if time entries fail
+        mock_get_tasks.return_value = []
 
         # Set some dummy values first to ensure they aren't cleared (unless designed to)
         dummy_labels = {
@@ -696,7 +763,7 @@ class TestTogglExporter(unittest.TestCase):
         self.time_entries_count.labels(**dummy_labels).set(expected_dummy_count)
 
         # Run the function
-        exporter.update_time_entries_metrics(lookback_hours)
+        exporter.update_time_entries_metrics(TEST_WORKSPACE_ID, lookback_hours)
 
         # Verify API call was made
         assert mock_get_time_entries.called

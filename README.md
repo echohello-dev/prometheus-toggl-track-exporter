@@ -1,3 +1,5 @@
+![](./docs/images/toggl.png)
+
 # Prometheus Toggl Track Exporter
 
 Extract Toggl Track API metrics via Prometheus with this exporter.
@@ -16,6 +18,9 @@ Extract Toggl Track API metrics via Prometheus with this exporter.
 - Includes Taskfile for command orchestration
 - Manages tool versions with asdf
 - Uses Ruff for lightning-fast Python linting and formatting
+- Includes a pre-configured Grafana dashboard (`grafana/dashboard.json`) for visualizing metrics
+
+![](./docs/images/grafana.png)
 
 ## Metrics
 

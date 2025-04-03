@@ -16,7 +16,16 @@ EXPORTER_PORT = int(os.environ.get("EXPORTER_PORT", "9090"))
 # Note: prometheus_client ignores this path
 METRICS_PATH = os.environ.get("METRICS_PATH", "/metrics")
 COLLECTION_INTERVAL = int(os.environ.get("COLLECTION_INTERVAL", "60"))
-TIME_ENTRIES_LOOKBACK_HOURS = int(os.environ.get("TIME_ENTRIES_LOOKBACK_HOURS", "24"))
+# Comma-separated list of lookback periods in hours (e.g., "24,168,720")
+LOOKBACK_HOURS_STR = os.environ.get("TIME_ENTRIES_LOOKBACK_HOURS_LIST", "24")
+TIME_ENTRIES_LOOKBACK_HOURS_LIST = [
+    int(h.strip()) for h in LOOKBACK_HOURS_STR.split(",") if h.strip().isdigit()
+]
+if not TIME_ENTRIES_LOOKBACK_HOURS_LIST:
+    print(
+        "Warning: No valid lookback hours found in TIME_ENTRIES_LOOKBACK_HOURS_LIST. Defaulting to [24]."
+    )
+    TIME_ENTRIES_LOOKBACK_HOURS_LIST = [24]
 
 # --- Metrics Definitions ---
 TOGGL_API_ERRORS = Counter(
@@ -711,9 +720,9 @@ def collect_metrics() -> None:
         if default_workspace_id:
             print(f"Using default workspace ID: {default_workspace_id}")
             update_aggregate_metrics(default_workspace_id)
-            update_time_entries_metrics(
-                default_workspace_id, TIME_ENTRIES_LOOKBACK_HOURS
-            )
+            # Iterate through configured lookback periods
+            for lookback_hours in TIME_ENTRIES_LOOKBACK_HOURS_LIST:
+                update_time_entries_metrics(default_workspace_id, lookback_hours)
         else:
             print(
                 "Could not determine default workspace ID. "

@@ -494,14 +494,14 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "max(toggl_time_entries_untagged_count{timeframe=\"24h\"})",
+                    "expr": "max(toggl_time_entries_untagged_count{timeframe=\"$timeframe\"})",
                     "instant": true,
-                    "legendFormat": "Untagged Entries (24h)",
+                    "legendFormat": "Untagged Entries ($timeframe)",
                     "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "Untagged Entries (24h)",
+            "title": "Untagged Entries ($timeframe)",
             "type": "stat"
         },
         {
@@ -566,14 +566,14 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "max(toggl_time_entries_billable_ratio{timeframe=\"24h\"})",
+                    "expr": "max(toggl_time_entries_billable_ratio{timeframe=\"$timeframe\"})",
                     "instant": true,
-                    "legendFormat": "Billable Ratio (24h)",
+                    "legendFormat": "Billable Ratio ($timeframe)",
                     "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "Billable Ratio (24h)",
+            "title": "Billable Ratio ($timeframe)",
             "type": "gauge"
         },
         {
@@ -635,14 +635,14 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "max(toggl_time_entries_avg_duration_seconds{timeframe=\"24h\"})",
+                    "expr": "max(toggl_time_entries_avg_duration_seconds{timeframe=\"$timeframe\"})",
                     "instant": true,
-                    "legendFormat": "Avg Duration (24h)",
+                    "legendFormat": "Avg Duration ($timeframe)",
                     "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "Avg Entry Duration (24h)",
+            "title": "Avg Entry Duration ($timeframe)",
             "type": "stat"
         },
         {
@@ -813,14 +813,14 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "sum by (project_name) (toggl_time_entries_duration_seconds{timeframe=\"24h\"})",
+                    "expr": "sum by (project_name) (toggl_time_entries_duration_seconds{timeframe=\"$timeframe\"})",
                     "instant": true,
                     "legendFormat": "{{project_name}}",
                     "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "Total Duration by Project (Lookback Period)",
+            "title": "Total Duration by Project ($timeframe)",
             "type": "barchart"
         },
         {
@@ -910,14 +910,14 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "sum by (project_name) (toggl_time_entries_count{timeframe=\"24h\"})",
+                    "expr": "sum by (project_name) (toggl_time_entries_count{timeframe=\"$timeframe\"})",
                     "instant": true,
                     "legendFormat": "{{project_name}}",
                     "range": false,
                     "refId": "A"
                 }
             ],
-            "title": "Completed Entries Count by Project (Lookback Period)",
+            "title": "Completed Entries Count by Project ($timeframe)",
             "type": "barchart"
         },
         {
@@ -985,7 +985,7 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "sum by (project_name) (toggl_time_entries_duration_seconds{timeframe=\"24h\"})",
+                    "expr": "sum by (project_name) (toggl_time_entries_duration_seconds{timeframe=\"$timeframe\"})",
                     "format": "table",
                     "instant": true,
                     "legendFormat": "{{project_name}}",
@@ -993,7 +993,7 @@
                     "refId": "A"
                 }
             ],
-            "title": "Project Duration Distribution (24h)",
+            "title": "Project Duration Distribution ($timeframe)",
             "type": "piechart"
         },
         {
@@ -1473,6 +1473,33 @@
                     "query": "label_values(toggl_time_entry_running, project_name)",
                     "refId": "StandardVariableQuery"
                 },
+                "type": "query"
+            },
+            {
+                "current": {
+                    "selected": true,
+                    "text": "24h",
+                    "value": "24h"
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                },
+                "definition": "label_values(toggl_time_entries_duration_seconds, timeframe)",
+                "hide": 0,
+                "includeAll": false,
+                "label": "Timeframe",
+                "multi": false,
+                "name": "timeframe",
+                "options": [],
+                "query": {
+                    "query": "label_values(toggl_time_entries_duration_seconds, timeframe)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "regex": "",
+                "skipUrlSync": false,
+                "sort": 1,
                 "type": "query"
             }
         ]
