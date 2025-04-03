@@ -746,7 +746,7 @@ class TestTogglExporter(unittest.TestCase):
         lookback_hours = 1
         expected_dummy_count = 5
         mock_get_time_entries.return_value = None  # Simulate API error
-        mock_get_projects.return_value = []  # Need to mock these even if time entries fail
+        mock_get_projects.return_value = []  # Need to mock these even if time entries fail  # noqa: E501
         mock_get_tasks.return_value = []
 
         # Set some dummy values first to ensure they aren't cleared (unless designed to)
@@ -762,7 +762,7 @@ class TestTogglExporter(unittest.TestCase):
         }
         self.time_entries_count.labels(**dummy_labels).set(expected_dummy_count)
 
-        # Run the function
+        # Run the function - it should NOT raise an exception when API returns None
         exporter.update_time_entries_metrics(TEST_WORKSPACE_ID, lookback_hours)
 
         # Verify API call was made
