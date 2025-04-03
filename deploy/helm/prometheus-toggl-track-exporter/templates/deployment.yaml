@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "prometheus-toggl-track-exporter.fullname" . }}
+  labels:
+    {{- include "prometheus-toggl-track-exporter.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "prometheus-toggl-track-exporter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "prometheus-toggl-track-exporter.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "prometheus-toggl-track-exporter.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: EXPORTER_PORT
+              value: {{ .Values.exporter.port | quote }}
+            - name: COLLECTION_INTERVAL
+              value: {{ .Values.exporter.collectionInterval | quote }}
+            - name: TIME_ENTRIES_LOOKBACK_HOURS
+              value: {{ .Values.exporter.timeEntriesLookbackHours | quote }}
+            {{- if .Values.injectSecrets.enabled }}
+            - name: TOGGL_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.injectSecrets.secretName | default (printf "%s-secret" (include "prometheus-toggl-track-exporter.fullname" .)) }}
+                  key: TOGGL_API_TOKEN
+            {{- else if .Values.toggl.apiToken }}
+            # WARNING: Storing token directly in environment variable is not recommended for production.
+            - name: TOGGL_API_TOKEN
+              value: {{ .Values.toggl.apiToken | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          # livenessProbe:
+          #   httpGet:
+          #     path: / # Simple check if the server is up
+          #     port: http
+          # readinessProbe:
+          #   httpGet:
+          #     path: / # Simple check if the server is up
+          #     port: http
+          resources:
+            {{- toYaml .Values.exporter.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
