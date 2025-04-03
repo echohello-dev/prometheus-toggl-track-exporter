@@ -225,7 +225,7 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "max(toggl_time_entries_avg_duration_seconds{timeframe=\\"24h\\"})",
+                    "expr": "max(toggl_time_entries_avg_duration_seconds{timeframe=\\\"24h\\\\\"})",
                     "instant": true,
                     "legendFormat": "Avg Duration (24h)",
                     "range": false,
@@ -282,7 +282,7 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "max(toggl_time_entries_billable_ratio{timeframe=\\"24h\\"})",
+                    "expr": "max(toggl_time_entries_billable_ratio{timeframe=\\\"24h\\\\\"})",
                     "instant": true,
                     "legendFormat": "Billable Ratio (24h)",
                     "range": false,
@@ -336,7 +336,7 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "max(toggl_time_entries_untagged_count{timeframe=\\"24h\\"})",
+                    "expr": "max(toggl_time_entries_untagged_count{timeframe=\\\"24h\\\\\"})",
                     "instant": true,
                     "legendFormat": "Untagged Entries (24h)",
                     "range": false,

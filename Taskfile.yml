@@ -62,7 +62,7 @@ tasks:
   docker-compose-up:
     desc: Run using Docker Compose
     cmds:
-      - docker compose up -d
+      - docker compose up --build -d
 
   docker-compose-down:
     desc: Stop docker-compose services
